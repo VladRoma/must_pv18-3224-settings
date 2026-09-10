@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>MUST PV18 · VPM II Monitor</title>
+  <link rel="stylesheet" href="/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="brand-bar"></div>
+      <div>
+        <h1>MUST PV18-3224</h1>
+        <div class="tagline">VPM II · Modbus RTU Monitor</div>
+        <p id="conn-line">—</p>
+      </div>
+    </div>
+    <div class="header-actions">
+      <button id="refresh-btn" type="button">↻ Оновити</button>
+      <div id="status-pill" class="pill">● Очікування</div>
+    </div>
+  </header>
+
+  <main>
+    <div class="tabs">
+      <div class="tab active" data-tab="overview">Огляд</div>
+      <div class="tab" data-tab="chart">Графік</div>
+      <div class="tab" data-tab="bms">АКБ / CAN</div>
+      <div class="tab" data-tab="energy">Енергія</div>
+      <div class="tab" data-tab="settings">Налаштування</div>
+    </div>
+
+    <section id="panel-overview" class="panel active">
+      <div class="grid-top">
+        <article class="card">
+          <div class="card-stripe" style="background: var(--battery)"></div>
+          <div class="card-body">
+            <div class="card-label">ЗАРЯД АКБ</div>
+            <div id="soc-value" class="soc-value">—</div>
+            <div class="soc-bar"><div id="soc-fill" class="soc-fill"></div></div>
+            <div id="hero-meta" class="hero-meta">—</div>
+            <div id="state-badge" class="badge">—</div>
+          </div>
+        </article>
+
+        <article class="card flow-wrap">
+          <div class="flow-title">ПОТОК ЕНЕРГІЇ</div>
+          <svg id="energy-flow" class="energy-flow" viewBox="0 0 640 240" aria-label="Схема потоку енергії">
+            <defs>
+              <marker id="arrow" markerWidth="8" markerHeight="8" refX="6" refY="3" orient="auto">
+                <path d="M0,0 L6,3 L0,6 Z" fill="currentColor"></path>
+              </marker>
+            </defs>
+            <line id="line-pv" x1="320" y1="72" x2="320" y2="108" stroke="#334155" stroke-width="2" marker-end="url(#arrow)"></line>
+            <line id="line-grid" x1="168" y1="168" x2="268" y2="132" stroke="#334155" stroke-width="2" marker-end="url(#arrow)"></line>
+            <line id="line-load" x1="372" y1="132" x2="472" y2="168" stroke="#334155" stroke-width="2" marker-end="url(#arrow)"></line>
+
+            <g class="flow-node" transform="translate(320,48)">
+              <circle r="34" fill="#121822" stroke="#243044"></circle>
+              <text y="-6" text-anchor="middle" fill="#fcd34d" font-size="18">☀</text>
+              <text y="12" text-anchor="middle" fill="#7d92ad" font-size="11">PV</text>
+              <text id="flow-pv" y="30" text-anchor="middle" fill="#fcd34d" font-size="12" font-weight="700">—</text>
+            </g>
+            <g class="flow-node" transform="translate(136,176)">
+              <circle r="34" fill="#121822" stroke="#243044"></circle>
+              <text y="-6" text-anchor="middle" fill="#60a5fa" font-size="18">⚡</text>
+              <text y="12" text-anchor="middle" fill="#7d92ad" font-size="11">Мережа</text>
+              <text id="flow-grid" y="30" text-anchor="middle" fill="#60a5fa" font-size="12" font-weight="700">—</text>
+            </g>
+            <g class="flow-node" transform="translate(504,176)">
+              <circle r="34" fill="#121822" stroke="#243044"></circle>
+              <text y="-6" text-anchor="middle" fill="#f472b6" font-size="18">🏠</text>
+              <text y="12" text-anchor="middle" fill="#7d92ad" font-size="11">Навантаження</text>
+              <text id="flow-load" y="30" text-anchor="middle" fill="#f472b6" font-size="12" font-weight="700">—</text>
+            </g>
+            <g class="flow-node" transform="translate(320,132)">
+              <circle r="40" fill="#182030" stroke="#34d399" stroke-width="2"></circle>
+              <text y="-8" text-anchor="middle" fill="#34d399" font-size="18">🔋</text>
+              <text y="10" text-anchor="middle" fill="#7d92ad" font-size="11">АКБ</text>
+              <text id="flow-batt" y="28" text-anchor="middle" fill="#34d399" font-size="11" font-weight="700">—</text>
+              <text id="flow-soc" y="42" text-anchor="middle" fill="#34d399" font-size="11" font-weight="700">—</text>
+            </g>
+          </svg>
+        </article>
+      </div>
+
+      <div class="grid-4" id="info-cards"></div>
+      <div class="grid-metrics" id="metric-cards"></div>
+    </section>
+
+    <section id="panel-chart" class="panel">
+      <div class="card chart-toolbar">
+        <div class="card-stripe" style="background: var(--accent)"></div>
+        <div class="chart-toolbar">
+          <div id="chart-info" class="chart-info">Точок: 0</div>
+          <div class="chart-toggles">
+            <label><input type="checkbox" data-series="pv" checked> PV</label>
+            <label><input type="checkbox" data-series="load" checked> Load</label>
+            <label><input type="checkbox" data-series="grid" checked> Grid</label>
+            <label><input type="checkbox" data-series="batt" checked> АКБ</label>
+          </div>
+          <button id="clear-chart" type="button">Очистити</button>
+        </div>
+      </div>
+      <article class="card chart-card">
+        <h3>BMS SOC</h3>
+        <div class="chart-box"><canvas id="soc-chart"></canvas></div>
+      </article>
+      <article class="card chart-card">
+        <h3>ПОТУЖНІСТЬ</h3>
+        <div class="chart-box"><canvas id="power-chart"></canvas></div>
+      </article>
+    </section>
+
+    <section id="panel-bms" class="panel">
+      <div class="card banner">
+        <div class="card-stripe" style="background: var(--battery)"></div>
+        CAN → інвертор → Modbus · регістри 109–114
+      </div>
+      <div class="bms-grid" id="bms-cards"></div>
+      <div class="table-wrap" id="table-bms"></div>
+    </section>
+
+    <section id="panel-energy" class="panel">
+      <div class="table-wrap" id="table-energy"></div>
+    </section>
+
+    <section id="panel-settings" class="panel">
+      <div class="table-wrap" id="table-settings"></div>
+    </section>
+  </main>
+
+  <footer>
+    <span id="updated-at">Оновлення: —</span>
+    <span>Лише читання · CAN/BMS через інвертор</span>
+  </footer>
+
+  <script src="/app.js"></script>
+</body>
+</html>
