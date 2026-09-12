@@ -947,6 +947,34 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Показати програми, доступні для запису",
     )
+    parser.add_argument(
+        "--bms-host",
+        dest="bms_host",
+        help="IP Wi‑Fi модуля АКБ MUST LP16-24200 (PACEEX TCP)",
+    )
+    parser.add_argument(
+        "--bms-port",
+        dest="bms_port",
+        type=int,
+        default=8888,
+        help="TCP-порт BMS (типово 8888)",
+    )
+    parser.add_argument(
+        "--bms-scan",
+        action="store_true",
+        help="Знайти Wi‑Fi модуль АКБ у локальній мережі",
+    )
+    parser.add_argument(
+        "--bms-only",
+        action="store_true",
+        help="Лише АКБ по Wi‑Fi, без Modbus інвертора",
+    )
+    parser.add_argument(
+        "--settings-password",
+        dest="settings_password",
+        default="",
+        help="Пароль вкладки Налаштування (або змінна MUST_SETTINGS_PASSWORD)",
+    )
     return parser.parse_args()
 
 
@@ -989,6 +1017,29 @@ def main() -> int:
         sys.stdout.reconfigure(encoding="utf-8")
 
     args = parse_args()
+    if args.bms_scan:
+        from must_battery import BatteryError, run_scan
+
+        try:
+            found = run_scan(args.bms_port)
+        except BatteryError as exc:
+            print(f"Помилка сканування: {exc}", file=sys.stderr)
+            return 1
+        return 0 if found else 2
+
+    if args.bms_only and not args.web and not args.gui:
+        from must_battery import PaceexWifiClient, print_report
+
+        if not args.bms_host:
+            print("Для --bms-only потрібен --bms-host", file=sys.stderr)
+            return 3
+        try:
+            print_report(PaceexWifiClient(args.bms_host, args.bms_port, args.timeout).read())
+            return 0
+        except Exception as exc:
+            print(f"Помилка АКБ Wi‑Fi: {exc}", file=sys.stderr)
+            return 1
+
     if args.gui:
         from must_gui import run_gui
 

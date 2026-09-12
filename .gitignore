@@ -217,5 +217,8 @@ __marimo__/
 # Streamlit
 .streamlit/secrets.toml
 
+.must-settings-password
+.must-web.env
+
 # Local research
 _modbus_protocol.xlsx

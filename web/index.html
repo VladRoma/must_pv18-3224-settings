@@ -13,7 +13,7 @@
       <div class="brand-bar"></div>
       <div>
         <h1>MUST PV18-3224</h1>
-        <div class="tagline">VPM II · Modbus RTU Monitor</div>
+        <div class="tagline">VPM II · Modbus + АКБ Wi‑Fi</div>
         <p id="conn-line">—</p>
       </div>
     </div>
@@ -117,9 +117,10 @@
     <section id="panel-bms" class="panel">
       <div class="card banner">
         <div class="card-stripe" style="background: var(--battery)"></div>
-        CAN → інвертор → Modbus · регістри 109–114
+        <span id="bms-banner">CAN → інвертор → Modbus · регістри 109–114</span>
       </div>
       <div class="bms-grid" id="bms-cards"></div>
+      <div id="cell-grid" class="cell-grid"></div>
       <div class="table-wrap" id="table-bms"></div>
     </section>
 
@@ -132,7 +133,24 @@
         <div class="card-stripe" style="background: var(--warn)"></div>
         Запис у інвертор · перевір значення перед збереженням · відповідає LCD-програмам
       </div>
-      <div id="settings-editor"></div>
+      <div id="settings-gate" class="card settings-gate">
+        <div class="card-stripe" style="background: var(--warn)"></div>
+        <form id="settings-login" class="settings-login">
+          <div>
+            <div class="metric-title">Пароль для налаштувань</div>
+            <div class="metric-sub">Огляд і графіки відкриті. Зміна інвертора — лише після пароля.</div>
+          </div>
+          <input id="settings-password" type="password" autocomplete="current-password" placeholder="Пароль">
+          <button type="submit">Увійти</button>
+        </form>
+        <div id="settings-login-error" class="settings-login-error hidden"></div>
+      </div>
+      <div id="settings-unlocked" class="hidden">
+        <div class="settings-toolbar">
+          <button id="settings-logout" type="button">Вийти</button>
+        </div>
+        <div id="settings-editor"></div>
+      </div>
       <div id="settings-toast" class="toast hidden"></div>
     </section>
   </main>
@@ -140,7 +158,7 @@
   <footer>
     <span id="updated-at">Оновлення: —</span>
     <span id="refresh-hint">—</span>
-    <span>Читання + запис налаштувань · CAN/BMS через інвертор</span>
+    <span>Читання інвертора · LP16-24200 по Wi‑Fi (PACEEX)</span>
   </footer>
 
   <script src="/app.js"></script>

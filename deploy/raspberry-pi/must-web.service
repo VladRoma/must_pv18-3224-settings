@@ -1,6 +1,6 @@
 [Unit]
 Description=MUST PV18-3224 web dashboard
-After=network-online.target
+After=network-online.target tailscaled.service
 Wants=network-online.target
 
 [Service]
@@ -9,6 +9,7 @@ User=pi
 Group=dialout
 WorkingDirectory=/home/pi/must_pv18-3224-settings
 Environment=PYTHONUNBUFFERED=1
+EnvironmentFile=-/home/pi/must_pv18-3224-settings/.must-web.env
 ExecStart=/home/pi/must_pv18-3224-settings/.venv/bin/python must_settings.py --web --lan --port /dev/ttyUSB0 --baud 19200 --slave 4 --http-port 8080
 Restart=on-failure
 RestartSec=5

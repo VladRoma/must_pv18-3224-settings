@@ -4,21 +4,120 @@
 from __future__ import annotations
 
 import argparse
+import hmac
 import json
 import mimetypes
+import os
+import secrets
 import socket
+import subprocess
 import threading
+import time
 from datetime import datetime, timezone
+from http.cookies import SimpleCookie
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import urlparse
 
 import serial
 
+import must_battery
 import must_settings as core
 
 WEB_DIR = Path(__file__).resolve().parent / "web"
+PASSWORD_FILE = Path(__file__).resolve().parent / ".must-settings-password"
+COOKIE_NAME = "must_auth"
+SESSION_MAX_AGE = 12 * 3600
 _read_lock = threading.Lock()
+
+
+class SettingsAuth:
+    """Пароль лише для вкладки «Налаштування» і запису в інвертор."""
+
+    def __init__(self, password: str) -> None:
+        self.password = password
+        self._lock = threading.Lock()
+        self._sessions: dict[str, float] = {}
+        self._fails: dict[str, list[float]] = {}
+
+    def login(self, password: str, ip: str) -> str | None:
+        now = time.monotonic()
+        with self._lock:
+            recent = [stamp for stamp in self._fails.get(ip, []) if now - stamp < 60]
+            self._fails[ip] = recent
+            if len(recent) >= 8:
+                return None
+            if not hmac.compare_digest(password.encode("utf-8"), self.password.encode("utf-8")):
+                recent.append(now)
+                self._fails[ip] = recent
+                return None
+            self._fails.pop(ip, None)
+            self._purge_locked(now)
+            token = secrets.token_urlsafe(32)
+            self._sessions[token] = now + SESSION_MAX_AGE
+            return token
+
+    def logout(self, token: str | None) -> None:
+        if not token:
+            return
+        with self._lock:
+            self._sessions.pop(token, None)
+
+    def valid(self, token: str | None) -> bool:
+        if not token:
+            return False
+        now = time.monotonic()
+        with self._lock:
+            self._purge_locked(now)
+            expiry = self._sessions.get(token)
+            if expiry is None:
+                return False
+            if expiry < now:
+                self._sessions.pop(token, None)
+                return False
+            return True
+
+    def _purge_locked(self, now: float) -> None:
+        expired = [key for key, expiry in self._sessions.items() if expiry < now]
+        for key in expired:
+            del self._sessions[key]
+
+
+def ensure_settings_password(args: argparse.Namespace) -> str:
+    cli = str(getattr(args, "settings_password", "") or "").strip()
+    if cli:
+        return cli
+    env = (os.environ.get("MUST_SETTINGS_PASSWORD") or "").strip()
+    if env:
+        return env
+    if PASSWORD_FILE.is_file():
+        lines = PASSWORD_FILE.read_text(encoding="utf-8").strip().splitlines()
+        if lines and lines[0].strip():
+            return lines[0].strip()
+    password = secrets.token_urlsafe(8).replace("-", "").replace("_", "")[:10]
+    PASSWORD_FILE.write_text(password + "\n", encoding="utf-8")
+    try:
+        PASSWORD_FILE.chmod(0o600)
+    except OSError:
+        pass
+    print(f"Пароль вкладки «Налаштування»:  {password}")
+    print(f"Файл: {PASSWORD_FILE}")
+    return password
+
+
+def _cookie_token(headers) -> str | None:
+    raw = headers.get("Cookie", "") if headers else ""
+    cookie = SimpleCookie()
+    try:
+        cookie.load(raw)
+    except (TypeError, ValueError):
+        return None
+    morsel = cookie.get(COOKIE_NAME)
+    return morsel.value if morsel else None
+
+
+def _auth_cookie(token: str, max_age: int = SESSION_MAX_AGE) -> str:
+    return f"{COOKIE_NAME}={token}; HttpOnly; Path=/; SameSite=Lax; Max-Age={max_age}"
 
 
 def _find_row(sections: list[core.Section], label: str) -> core.Row | None:
@@ -40,16 +139,38 @@ def _parse_num(text: object) -> float | None:
     return float(match.group(0).replace(",", "."))
 
 
+def _empty_metric(label: str) -> dict:
+    return {"label": label, "value": "—", "unit": ""}
+
+
+def _metric_from(value: object, unit: str, label: str) -> dict:
+    if value is None:
+        return _empty_metric(label)
+    return {"label": label, "value": value, "unit": unit}
+
+
 def build_payload(args: argparse.Namespace) -> dict:
-    with _read_lock:
-        data = core.probe_if_needed(args)
-        sections = core.build_sections(data)
-        writable = core.build_writable_settings(data)
+    sections: list[core.Section] = []
+    writable: list[dict] = []
+    inverter_error: str | None = None
+    bms_only = bool(getattr(args, "bms_only", False))
+    bms_host = getattr(args, "bms_host", None)
+
+    if not bms_only:
+        try:
+            with _read_lock:
+                data = core.probe_if_needed(args)
+                sections = core.build_sections(data)
+                writable = core.build_writable_settings(data)
+        except (serial.SerialException, core.ModbusRtuError) as exc:
+            inverter_error = str(exc)
+            if not bms_host:
+                raise
 
     def metric(label: str) -> dict:
         row = _find_row(sections, label)
         if not row:
-            return {"label": label, "value": "—", "unit": ""}
+            return _empty_metric(label)
         return {
             "label": label,
             "value": row["value"],
@@ -58,6 +179,74 @@ def build_payload(args: argparse.Namespace) -> dict:
             "program": row.get("program"),
         }
 
+    battery = None
+    if bms_host:
+        battery = must_battery.read_cached(
+            bms_host,
+            getattr(args, "bms_port", must_battery.DEFAULT_PORT),
+            getattr(args, "timeout", must_battery.DEFAULT_TIMEOUT),
+        )
+
+    inverter_ok = inverter_error is None and not bms_only
+    battery_ok = bool(battery and battery.get("ok"))
+    if bms_only:
+        inverter_ok = False
+    elif sections:
+        inverter_ok = True
+
+    if not inverter_ok and not battery_ok:
+        if inverter_error:
+            raise core.ModbusRtuError(inverter_error)
+        raise must_battery.BatteryConnectionError(
+            battery.get("error") if battery else "немає даних АКБ"
+        )
+
+    metrics = {
+        "soc": metric("BMS SOC"),
+        "soh": metric("BMS SOH"),
+        "state": metric("Робочий стан"),
+        "model": metric("Модель"),
+        "firmware": metric("Прошивка"),
+        "nominal_power": metric("Номінальна потужність"),
+        "protocol": metric("Modbus-протокол"),
+        "pv_p": metric("PV потужність"),
+        "load_p": metric("Потужність навантаження"),
+        "grid_p": metric("Потужність мережі"),
+        "batt_p": metric("Потужність АКБ (інвертор)"),
+        "batt_v": metric("Напруга АКБ (інвертор)"),
+        "batt_i": metric("Струм АКБ (інвертор)"),
+        "bms_v": metric("BMS напруга"),
+        "bms_i": metric("BMS струм"),
+        "bms_t": metric("BMS температура"),
+        "bms_err": metric("BMS помилки"),
+        "bat_type": metric("Тип акумулятора"),
+    }
+    numbers = {
+        "soc": _parse_num(metrics["soc"]["value"]),
+        "pv_w": _parse_num(metrics["pv_p"]["value"]),
+        "load_w": _parse_num(metrics["load_p"]["value"]),
+        "grid_w": _parse_num(metrics["grid_p"]["value"]),
+        "batt_w": _parse_num(metrics["batt_p"]["value"]),
+    }
+
+    if battery_ok:
+        metrics["soc"] = _metric_from(battery["soc"], "%", "BMS SOC")
+        metrics["soh"] = _metric_from(battery["soh"], "%", "BMS SOH")
+        metrics["bms_v"] = _metric_from(f"{battery['voltage']:.1f}", "В", "BMS напруга")
+        metrics["bms_i"] = _metric_from(f"{battery['current']:.1f}", "А", "BMS струм")
+        metrics["wifi_p"] = _metric_from(f"{battery['power']:.0f}", "Вт", "Потужність АКБ")
+        metrics["wifi_state"] = _metric_from(battery["state"], "", "Стан АКБ")
+        metrics["cycles"] = _metric_from(battery["cycles"], "", "Цикли")
+        metrics["remain_ah"] = _metric_from(f"{battery['remaining_ah']:.1f}", "А·год", "Залишок")
+        numbers["soc"] = battery["soc"]
+        numbers["batt_w"] = battery["power"]
+        if bms_only:
+            metrics["state"] = metrics["wifi_state"]
+            metrics["model"] = _metric_from("LP16-24200", "", "Модель")
+            metrics["batt_p"] = metrics["wifi_p"]
+            metrics["batt_v"] = metrics["bms_v"]
+            metrics["batt_i"] = metrics["bms_i"]
+
     return {
         "ok": True,
         "updated": datetime.now().astimezone().isoformat(timespec="seconds"),
@@ -65,36 +254,16 @@ def build_payload(args: argparse.Namespace) -> dict:
             "port": args.port,
             "baud": args.baud,
             "slave": args.slave,
+            "bms_host": bms_host,
+            "bms_port": getattr(args, "bms_port", must_battery.DEFAULT_PORT),
+            "bms_only": bms_only,
+            "inverter_error": inverter_error,
         },
         "sections": sections,
         "writable": writable,
-        "metrics": {
-            "soc": metric("BMS SOC"),
-            "soh": metric("BMS SOH"),
-            "state": metric("Робочий стан"),
-            "model": metric("Модель"),
-            "firmware": metric("Прошивка"),
-            "nominal_power": metric("Номінальна потужність"),
-            "protocol": metric("Modbus-протокол"),
-            "pv_p": metric("PV потужність"),
-            "load_p": metric("Потужність навантаження"),
-            "grid_p": metric("Потужність мережі"),
-            "batt_p": metric("Потужність АКБ (інвертор)"),
-            "batt_v": metric("Напруга АКБ (інвертор)"),
-            "batt_i": metric("Струм АКБ (інвертор)"),
-            "bms_v": metric("BMS напруга"),
-            "bms_i": metric("BMS струм"),
-            "bms_t": metric("BMS температура"),
-            "bms_err": metric("BMS помилки"),
-            "bat_type": metric("Тип акумулятора"),
-        },
-        "numbers": {
-            "soc": _parse_num(metric("BMS SOC")["value"]),
-            "pv_w": _parse_num(metric("PV потужність")["value"]),
-            "load_w": _parse_num(metric("Потужність навантаження")["value"]),
-            "grid_w": _parse_num(metric("Потужність мережі")["value"]),
-            "batt_w": _parse_num(metric("Потужність АКБ (інвертор)")["value"]),
-        },
+        "metrics": metrics,
+        "numbers": numbers,
+        "battery": battery,
     }
 
 
@@ -119,22 +288,43 @@ def write_setting_payload(args: argparse.Namespace, body: dict) -> dict:
     }
 
 
-def make_handler(args: argparse.Namespace):
+def make_handler(args: argparse.Namespace, auth: SettingsAuth):
     class MustWebHandler(BaseHTTPRequestHandler):
         def log_message(self, fmt: str, *log_args) -> None:
             print(f"[web] {self.address_string()} {fmt % log_args}")
 
-        def _send_bytes(self, code: int, body: bytes, content_type: str) -> None:
+        def _authed(self) -> bool:
+            return auth.valid(_cookie_token(self.headers))
+
+        def _send_bytes(
+            self,
+            code: int,
+            body: bytes,
+            content_type: str,
+            extra_headers: list[tuple[str, str]] | None = None,
+        ) -> None:
             self.send_response(code)
             self.send_header("Content-Type", content_type)
             self.send_header("Content-Length", str(len(body)))
             self.send_header("Cache-Control", "no-store")
+            for name, value in extra_headers or []:
+                self.send_header(name, value)
             self.end_headers()
             self.wfile.write(body)
 
-        def _send_json(self, code: int, payload: dict) -> None:
+        def _send_json(
+            self,
+            code: int,
+            payload: dict,
+            extra_headers: list[tuple[str, str]] | None = None,
+        ) -> None:
             body = json.dumps(payload, ensure_ascii=False).encode("utf-8")
-            self._send_bytes(code, body, "application/json; charset=utf-8")
+            self._send_bytes(code, body, "application/json; charset=utf-8", extra_headers)
+
+        def _read_json(self) -> dict:
+            length = int(self.headers.get("Content-Length", "0"))
+            raw = self.rfile.read(length) if length else b"{}"
+            return json.loads(raw.decode("utf-8"))
 
         def _serve_file(self, rel_path: str) -> None:
             path = (WEB_DIR / rel_path).resolve()
@@ -149,9 +339,18 @@ def make_handler(args: argparse.Namespace):
             parsed = urlparse(self.path)
             route = parsed.path
 
+            if route == "/api/auth/status":
+                self._send_json(200, {"ok": True, "authenticated": self._authed()})
+                return
+
             if route == "/api/data":
                 try:
-                    self._send_json(200, build_payload(args))
+                    payload = build_payload(args)
+                    authed = self._authed()
+                    payload["settings_auth"] = authed
+                    if not authed:
+                        payload["writable"] = []
+                    self._send_json(200, payload)
                 except serial.SerialException as exc:
                     self._send_json(
                         503,
@@ -165,6 +364,11 @@ def make_handler(args: argparse.Namespace):
                     self._send_json(
                         503,
                         {"ok": False, "error": "modbus", "message": str(exc)},
+                    )
+                except must_battery.BatteryError as exc:
+                    self._send_json(
+                        503,
+                        {"ok": False, "error": "battery", "message": str(exc)},
                     )
                 return
 
@@ -182,14 +386,51 @@ def make_handler(args: argparse.Namespace):
 
         def do_POST(self) -> None:
             parsed = urlparse(self.path)
-            if parsed.path != "/api/settings/write":
+            route = parsed.path
+
+            if route == "/api/auth/login":
+                try:
+                    body = self._read_json()
+                except ValueError:
+                    self._send_json(400, {"ok": False, "error": "json", "message": "некоректний JSON"})
+                    return
+                password = str(body.get("password") or "")
+                token = auth.login(password, self.client_address[0])
+                if not token:
+                    self._send_json(
+                        401,
+                        {"ok": False, "error": "auth", "message": "Невірний пароль"},
+                    )
+                    return
+                self._send_json(
+                    200,
+                    {"ok": True, "authenticated": True},
+                    extra_headers=[("Set-Cookie", _auth_cookie(token))],
+                )
+                return
+
+            if route == "/api/auth/logout":
+                auth.logout(_cookie_token(self.headers))
+                self._send_json(
+                    200,
+                    {"ok": True, "authenticated": False},
+                    extra_headers=[("Set-Cookie", _auth_cookie("deleted", max_age=0))],
+                )
+                return
+
+            if route != "/api/settings/write":
                 self._send_bytes(404, b"Not found", "text/plain; charset=utf-8")
                 return
 
-            length = int(self.headers.get("Content-Length", "0"))
-            raw = self.rfile.read(length) if length else b"{}"
+            if not self._authed():
+                self._send_json(
+                    401,
+                    {"ok": False, "error": "auth", "message": "Спочатку введи пароль на вкладці Налаштування"},
+                )
+                return
+
             try:
-                body = json.loads(raw.decode("utf-8"))
+                body = self._read_json()
                 payload = write_setting_payload(args, body)
                 self._send_json(200, payload)
             except ValueError as exc:
@@ -220,10 +461,30 @@ def _guess_lan_ip() -> str | None:
         return None
 
 
+def _guess_tailscale_ip() -> str | None:
+    try:
+        result = subprocess.run(
+            ["tailscale", "ip", "-4"],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=2,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    for line in result.stdout.splitlines():
+        ip = line.strip()
+        if ip.startswith("100."):
+            return ip
+    return None
+
+
 def run_web(args: argparse.Namespace) -> None:
+    password = ensure_settings_password(args)
+    auth = SettingsAuth(password)
     host = _resolve_web_host(args)
     port = getattr(args, "http_port", 8080)
-    handler = make_handler(args)
+    handler = make_handler(args, auth)
     server = ThreadingHTTPServer((host, port), handler)
     print(f"MUST Web Dashboard  →  http://127.0.0.1:{port}/")
     if host == "0.0.0.0":
@@ -232,7 +493,23 @@ def run_web(args: argparse.Namespace) -> None:
             print(f"Телефон у Wi‑Fi       →  http://{lan_ip}:{port}/")
         else:
             print(f"Локальна мережа       →  http://<IP-Pi>:{port}/")
-    print(f"Serial {args.port}  ·  {args.baud} 8N1  ·  slave {args.slave}")
+        ts_ip = _guess_tailscale_ip()
+        if ts_ip:
+            print(f"Tailscale             →  http://{ts_ip}:{port}/")
+    print("Вкладка «Налаштування» захищена паролем.")
+    if getattr(args, "bms_only", False):
+        print(
+            f"АКБ Wi‑Fi {getattr(args, 'bms_host', '—')}:"
+            f"{getattr(args, 'bms_port', must_battery.DEFAULT_PORT)}"
+        )
+    else:
+        print(f"Serial {args.port}  ·  {args.baud} 8N1  ·  slave {args.slave}")
+        bms_host = getattr(args, "bms_host", None)
+        if bms_host:
+            print(
+                f"АКБ Wi‑Fi {bms_host}:"
+                f"{getattr(args, 'bms_port', must_battery.DEFAULT_PORT)}"
+            )
     print("Ctrl+C — зупинити сервер")
     try:
         server.serve_forever()

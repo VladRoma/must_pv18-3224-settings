@@ -38,6 +38,17 @@ const BMS_CARDS = [
   ["Помилки", "bms_err", "var(--error)"],
 ];
 
+const BMS_WIFI_CARDS = [
+  ["Напруга пакета", "bms_v", "var(--battery)"],
+  ["Струм", "bms_i", "var(--battery)"],
+  ["Потужність", "wifi_p", "var(--battery)"],
+  ["SOC", "soc", "var(--ok)"],
+  ["SOH", "soh", "var(--info)"],
+  ["Стан", "wifi_state", "var(--accent)"],
+  ["Залишок", "remain_ah", "var(--info)"],
+  ["Цикли", "cycles", "var(--muted)"],
+];
+
 const history = {
   labels: [],
   soc: [],
@@ -54,6 +65,7 @@ let latestWritable = [];
 let toastTimer = null;
 let isConnected = false;
 let activeTab = "overview";
+let settingsAuthed = false;
 
 function isChartTabActive() {
   return activeTab === "chart";
@@ -280,9 +292,35 @@ function updateRefreshHint() {
   }
 }
 
+function renderCells(battery) {
+  const root = document.getElementById("cell-grid");
+  if (!root) return;
+  if (!battery || !battery.ok || !battery.cells || !battery.cells.length) {
+    root.innerHTML = "";
+    return;
+  }
+  const min = 2.8;
+  const max = 3.65;
+  root.innerHTML = battery.cells
+    .map((voltage, index) => {
+      const pct = Math.max(0, Math.min(100, ((voltage - min) / (max - min)) * 100));
+      const warn = voltage < 3.0 || voltage > 3.55;
+      const color = warn ? "var(--error)" : "var(--battery)";
+      return `
+        <article class="cell-card">
+          <div class="cell-label">Комірка ${String(index + 1).padStart(2, "0")}</div>
+          <div class="cell-value" style="color:${color}">${voltage.toFixed(3)} В</div>
+          <div class="cell-bar"><span style="width:${pct}%; background:${color}"></span></div>
+        </article>`;
+    })
+    .join("");
+}
+
 function updateOverview(payload) {
   const m = payload.metrics;
   const n = payload.numbers || {};
+  const battery = payload.battery;
+  const wifiOk = Boolean(battery && battery.ok);
   const socText = fmtMetric(m.soc);
   const socValue = document.getElementById("soc-value");
   const socFill = document.getElementById("soc-fill");
@@ -292,9 +330,14 @@ function updateOverview(payload) {
   socFill.style.width = n.soc == null ? "0%" : `${Math.max(0, Math.min(n.soc, 100))}%`;
   socFill.style.background = socColor(n.soc);
 
+  const wifiLine = wifiOk
+    ? `Wi‑Fi BMS: ${battery.voltage.toFixed(1)} В · ${battery.current.toFixed(1)} А · ${battery.power.toFixed(0)} Вт · ${battery.state}`
+    : battery && battery.error
+      ? `Wi‑Fi BMS: ${battery.error}`
+      : "Wi‑Fi BMS: не налаштовано";
   document.getElementById("hero-meta").textContent =
     `Інвертор: ${fmtMetric(m.batt_v)} · ${fmtMetric(m.batt_i)} · ${fmtMetric(m.batt_p)}\n` +
-    `CAN BMS: ${fmtMetric(m.bms_v)} · ${fmtMetric(m.bms_i)}`;
+    wifiLine;
   document.getElementById("state-badge").textContent = fmtMetric(m.state);
 
   document.getElementById("flow-pv").textContent = fmtMetric(m.pv_p);
@@ -309,7 +352,22 @@ function updateOverview(payload) {
 
   renderCards("info-cards", INFO_CARDS, m);
   renderCards("metric-cards", METRIC_CARDS, m);
-  renderCards("bms-cards", BMS_CARDS.map(([t, k, c]) => [t, k, c, "CAN"]), m, true);
+  const bmsCards = wifiOk ? BMS_WIFI_CARDS : BMS_CARDS;
+  const bmsSource = wifiOk ? "Wi‑Fi PACEEX" : "CAN";
+  renderCards("bms-cards", bmsCards.map(([t, k, c]) => [t, k, c, bmsSource]), m, true);
+
+  const banner = document.getElementById("bms-banner");
+  if (banner) {
+    if (wifiOk) {
+      const delta = battery.cell_delta != null ? ` · Δ ${battery.cell_delta.toFixed(3)} В` : "";
+      const serial = battery.serial ? ` · S/N ${battery.serial}` : "";
+      banner.textContent =
+        `LP16-24200 · ${battery.host}:${battery.port} · ${battery.cell_count} комірок${delta}${serial}`;
+    } else {
+      banner.textContent = "CAN → інвертор → Modbus · регістри 109–114";
+    }
+  }
+  renderCells(battery);
 
   renderTable("table-bms", payload.sections, new Set(["АКБ через CAN / BMS"]));
   renderTable(
@@ -318,6 +376,22 @@ function updateOverview(payload) {
     new Set(["PV, мережа, навантаження", "Пристрій і поточний стан"])
   );
   latestWritable = payload.writable || [];
+  settingsAuthed = Boolean(payload.settings_auth);
+  renderSettingsPanel();
+}
+
+function showSettingsGate(show) {
+  document.getElementById("settings-gate").classList.toggle("hidden", !show);
+  document.getElementById("settings-unlocked").classList.toggle("hidden", show);
+}
+
+function renderSettingsPanel() {
+  if (!settingsAuthed) {
+    showSettingsGate(true);
+    document.getElementById("settings-editor").innerHTML = "";
+    return;
+  }
+  showSettingsGate(false);
   renderSettingsEditor(latestWritable);
 }
 
@@ -419,10 +493,16 @@ async function saveSetting(item, input, button) {
   try {
     const res = await fetch("/api/settings/write", {
       method: "POST",
+      credentials: "same-origin",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ program: item.program, value }),
     });
     const payload = await res.json();
+    if (res.status === 401) {
+      settingsAuthed = false;
+      renderSettingsPanel();
+      throw new Error(payload.message || "Потрібен пароль");
+    }
     if (!payload.ok) {
       throw new Error(payload.message || "Помилка запису");
     }
@@ -443,15 +523,21 @@ async function refresh() {
 
   setStatus("loading", "Читання…");
   try {
-    const res = await fetch("/api/data", { cache: "no-store" });
+    const res = await fetch("/api/data", { cache: "no-store", credentials: "same-origin" });
     const payload = await res.json();
     if (!payload.ok) {
       throw new Error(payload.message || "Помилка зчитування");
     }
 
     const conn = payload.connection;
-    document.getElementById("conn-line").textContent =
-      `${conn.port} · ${conn.baud} 8N1 · slave ${conn.slave}`;
+    const parts = [];
+    if (!conn.bms_only) {
+      parts.push(`${conn.port} · ${conn.baud} 8N1 · slave ${conn.slave}`);
+    }
+    if (conn.bms_host) {
+      parts.push(`АКБ Wi‑Fi ${conn.bms_host}:${conn.bms_port}`);
+    }
+    document.getElementById("conn-line").textContent = parts.join("  ·  ") || "—";
     document.getElementById("updated-at").textContent =
       `Оновлено: ${new Date(payload.updated).toLocaleString("uk-UA")}`;
 
@@ -479,9 +565,43 @@ function setupTabs() {
       const tabId = tab.dataset.tab;
       document.getElementById(`panel-${tabId}`).classList.add("active");
       activeTab = tabId;
+      if (tabId === "settings") renderSettingsPanel();
       resetRefreshTimer();
     });
   });
+}
+
+async function loginSettings(event) {
+  event.preventDefault();
+  const input = document.getElementById("settings-password");
+  const error = document.getElementById("settings-login-error");
+  error.classList.add("hidden");
+  try {
+    const res = await fetch("/api/auth/login", {
+      method: "POST",
+      credentials: "same-origin",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ password: input.value }),
+    });
+    const payload = await res.json();
+    if (!payload.ok) {
+      throw new Error(payload.message || "Невірний пароль");
+    }
+    input.value = "";
+    settingsAuthed = true;
+    await refresh();
+    renderSettingsPanel();
+  } catch (err) {
+    error.textContent = err.message || "Невірний пароль";
+    error.classList.remove("hidden");
+  }
+}
+
+async function logoutSettings() {
+  await fetch("/api/auth/logout", { method: "POST", credentials: "same-origin" });
+  settingsAuthed = false;
+  latestWritable = [];
+  renderSettingsPanel();
 }
 
 function setupChartControls() {
@@ -496,6 +616,8 @@ function setupChartControls() {
 }
 
 document.getElementById("refresh-btn").addEventListener("click", refresh);
+document.getElementById("settings-login").addEventListener("submit", loginSettings);
+document.getElementById("settings-logout").addEventListener("click", logoutSettings);
 setupTabs();
 setupChartControls();
 initCharts();

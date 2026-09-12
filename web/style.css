@@ -317,6 +317,45 @@ main {
   margin-bottom: 14px;
 }
 
+.cell-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.cell-card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px 14px;
+}
+
+.cell-label {
+  color: var(--muted);
+  font-size: 0.78rem;
+  letter-spacing: 0.04em;
+}
+
+.cell-value {
+  font-size: 1.15rem;
+  font-weight: 800;
+  margin: 6px 0 8px;
+}
+
+.cell-bar {
+  height: 8px;
+  background: #243044;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.cell-bar span {
+  display: block;
+  height: 100%;
+  border-radius: 999px;
+}
+
 @media (max-width: 1100px) {
   .bms-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -481,6 +520,49 @@ tbody tr:nth-child(even) {
   border-radius: var(--radius);
   overflow: auto;
   max-height: 70vh;
+}
+
+.settings-gate {
+  padding: 18px;
+}
+
+.settings-login {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.settings-login input {
+  min-width: 220px;
+  padding: 10px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+}
+
+.settings-login-error {
+  margin-top: 10px;
+  color: var(--error);
+  font-weight: 700;
+}
+
+.settings-toolbar {
+  display: flex;
+  justify-content: flex-end;
+  margin-bottom: 12px;
+}
+
+.settings-toolbar button {
+  background: var(--surface);
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+
+.hidden {
+  display: none !important;
 }
 
 .toast {
