@@ -85,6 +85,25 @@ class ModbusRtuClient:
             )
         return list(struct.unpack(f">{count}H", data))
 
+    def write_holding(self, address: int, value: int) -> None:
+        value &= 0xFFFF
+        request = struct.pack(">BBHH", self.slave, 0x06, address, value)
+        request += struct.pack("<H", crc16(request))
+
+        self.ser.reset_input_buffer()
+        self.ser.write(request)
+        self.ser.flush()
+
+        response = self._read_exact(8)
+        self._check_crc(response)
+        unit, function, resp_addr, resp_val = struct.unpack(">BBHH", response[:6])
+        if unit != self.slave or function != 0x06:
+            raise ModbusRtuError(f"неочікувана відповідь на запис: fn={function}")
+        if resp_addr != address or resp_val != value:
+            raise ModbusRtuError(
+                f"echo mismatch: reg {resp_addr}≠{address} або val {resp_val}≠{value}"
+            )
+
     def _read_exact(self, size: int) -> bytes:
         data = self.ser.read(size)
         if len(data) != size:
@@ -469,12 +488,434 @@ def build_report(data: dict[str, RegisterMap]) -> None:
     r.dump()
 
 
+# --- Запис налаштувань ------------------------------------------------------
+
+SettingSpec = dict[str, object]
+
+
+def _enum_options(table: dict[int, str]) -> list[dict[str, object]]:
+    return [{"value": key, "label": label} for key, label in sorted(table.items())]
+
+
+def _bit_options(on: str, off: str) -> list[dict[str, object]]:
+    return [{"value": 1, "label": on}, {"value": 0, "label": off}]
+
+
+def _register_value(data: dict[str, RegisterMap], register: int) -> int:
+    for block in data.values():
+        if register in block:
+            return int(block[register])
+    raise ModbusRtuError(f"регістр {register} недоступний для читання")
+
+
+def writable_setting_specs(data: dict[str, RegisterMap]) -> list[SettingSpec]:
+    inv = data["inverter"]
+    specs: list[SettingSpec] = [
+        {
+            "program": 1,
+            "register": 20109,
+            "label": "Пріоритет вихідного джерела",
+            "section": "Пріоритети та мережа",
+            "kind": "enum",
+            "unit": "",
+            "options": _enum_options(ENERGY_USE_MODE),
+        },
+        {
+            "program": 2,
+            "register": 20111,
+            "label": "Діапазон вхідної AC-напруги",
+            "section": "Пріоритети та мережа",
+            "kind": "enum",
+            "unit": "",
+            "options": _enum_options(GRID_PROTECT),
+        },
+        {
+            "program": 3,
+            "register": 20102,
+            "label": "Вихідна напруга",
+            "section": "Пріоритети та мережа",
+            "kind": "voltage",
+            "unit": "В",
+        },
+        {
+            "program": 4,
+            "register": 20103,
+            "label": "Вихідна частота",
+            "section": "Пріоритети та мережа",
+            "kind": "frequency",
+            "unit": "Гц",
+        },
+        {
+            "program": 5,
+            "register": 20112,
+            "label": "Пріоритет сонячної енергії",
+            "section": "Пріоритети та мережа",
+            "kind": "enum",
+            "unit": "",
+            "options": _enum_options(SOLAR_USE_AIM),
+        },
+        {
+            "program": 10,
+            "register": 20143,
+            "label": "Пріоритет джерела заряджання",
+            "section": "Пріоритети та мережа",
+            "kind": "enum",
+            "unit": "",
+            "options": _enum_options(CHARGER_SOURCE),
+        },
+        {
+            "program": 11,
+            "register": 20132,
+            "label": "Макс. струм заряджання",
+            "section": "Заряджання",
+            "kind": "amperage",
+            "unit": "А",
+        },
+        {
+            "program": 13,
+            "register": 20125,
+            "label": "Струм заряджання від мережі",
+            "section": "Заряджання",
+            "kind": "amperage",
+            "unit": "А",
+        },
+        {
+            "program": 14,
+            "register": 10110,
+            "label": "Тип акумулятора",
+            "section": "Заряджання",
+            "kind": "enum",
+            "unit": "",
+            "options": _enum_options(BATTERY_TYPE),
+        },
+        {
+            "program": 17,
+            "register": 20123,
+            "label": "Напруга насичення (Bulk / C.V.)",
+            "section": "Напруги акумулятора (USE / LI)",
+            "kind": "voltage",
+            "unit": "В",
+        },
+        {
+            "program": 18,
+            "register": 20122,
+            "label": "Напруга буферного заряду (Float)",
+            "section": "Напруги акумулятора (USE / LI)",
+            "kind": "voltage",
+            "unit": "В",
+        },
+        {
+            "program": 20,
+            "register": 20118,
+            "label": "Стоп розряду АКБ (з мережею)",
+            "section": "Напруги акумулятора (USE / LI)",
+            "kind": "voltage",
+            "unit": "В",
+        },
+        {
+            "program": 21,
+            "register": 20119,
+            "label": "Стоп заряду АКБ",
+            "section": "Напруги акумулятора (USE / LI)",
+            "kind": "voltage",
+            "unit": "В",
+        },
+        {
+            "program": 28,
+            "register": 20144,
+            "label": "Баланс сонячної потужності",
+            "section": "Дисплей і сигналізація",
+            "kind": "toggle",
+            "unit": "",
+            "options": _bit_options("SbE", "Sbd"),
+        },
+        {
+            "program": 30,
+            "register": 10118,
+            "label": "Вирівнювання акумулятора",
+            "section": "Вирівнювання (Equalization)",
+            "kind": "toggle",
+            "unit": "",
+            "options": _bit_options("EEN", "EdS"),
+        },
+        {
+            "program": 31,
+            "register": 10119,
+            "label": "Напруга вирівнювання",
+            "section": "Вирівнювання (Equalization)",
+            "kind": "voltage",
+            "unit": "В",
+        },
+        {
+            "program": 33,
+            "register": 10121,
+            "label": "Час вирівнювання",
+            "section": "Вирівнювання (Equalization)",
+            "kind": "integer",
+            "unit": "хв",
+        },
+        {
+            "program": 34,
+            "register": 10122,
+            "label": "Таймаут вирівнювання",
+            "section": "Вирівнювання (Equalization)",
+            "kind": "integer",
+            "unit": "хв",
+        },
+        {
+            "program": 35,
+            "register": 10123,
+            "label": "Інтервал вирівнювання",
+            "section": "Вирівнювання (Equalization)",
+            "kind": "integer",
+            "unit": "днів",
+        },
+        {
+            "program": 37,
+            "register": 20137,
+            "label": "Метод контролю BMS",
+            "section": "BMS / літій (LI)",
+            "kind": "enum",
+            "unit": "",
+            "options": _enum_options(BMS_METHOD),
+        },
+        {
+            "program": 38,
+            "register": 20147,
+            "label": "SOC — стоп розряду",
+            "section": "BMS / літій (LI)",
+            "kind": "percent",
+            "unit": "%",
+        },
+        {
+            "program": 39,
+            "register": 20148,
+            "label": "SOC — стоп заряду",
+            "section": "BMS / літій (LI)",
+            "kind": "percent",
+            "unit": "%",
+        },
+        {
+            "program": 40,
+            "register": 20140,
+            "label": "Зв'язок з BMS",
+            "section": "BMS / літій (LI)",
+            "kind": "enum",
+            "unit": "",
+            "options": _enum_options(BMS_COMM),
+        },
+        {
+            "program": 41,
+            "register": 20141,
+            "label": "Протокол літієвої АКБ",
+            "section": "BMS / літій (LI)",
+            "kind": "integer",
+            "unit": "",
+        },
+    ]
+
+    bit_specs = [
+        (6, 0, "Обхід при перевантаженні", "bYE", "bYd"),
+        (7, 2, "Автоперезапуск після перевантаження", "LtE", "Ltd"),
+        (8, 3, "Автоперезапуск після перегріву", "ttE", "ttd"),
+        (22, 5, "Автоперегортання сторінок", "PTE", "PTd"),
+        (23, 4, "Підсвітка дисплея", "LON", "LOF"),
+        (24, 1, "Звуковий сигнал", "bON", "bOF"),
+        (25, 7, "Сигнал при втраті джерела", "AON", "AOF"),
+        (27, 6, "Запис кодів несправностей", "FON", "FOF"),
+    ]
+    for program, bit, label, on_label, off_label in bit_specs:
+        specs.append(
+            {
+                "program": program,
+                "register": 20142,
+                "label": label,
+                "section": "Дисплей і сигналізація" if program >= 22 else "Пріоритети та мережа",
+                "kind": "bit",
+                "unit": "",
+                "bit": bit,
+                "options": _bit_options(on_label, off_label),
+            }
+        )
+
+    if soc_mode(inv):
+        specs.append(
+            {
+                "program": 19,
+                "register": 20146,
+                "label": "Відсікання низької SOC",
+                "section": "Напруги акумулятора (USE / LI)",
+                "kind": "percent",
+                "unit": "%",
+            }
+        )
+    else:
+        specs.append(
+            {
+                "program": 19,
+                "register": 20127,
+                "label": "Відсікання низької DC-напруги",
+                "section": "Напруги акумулятора (USE / LI)",
+                "kind": "voltage",
+                "unit": "В",
+            }
+        )
+
+    specs.sort(key=lambda item: int(item["program"]))
+    return specs
+
+
+def _find_setting_spec(data: dict[str, RegisterMap], program: int) -> SettingSpec:
+    for spec in writable_setting_specs(data):
+        if int(spec["program"]) == program:
+            return spec
+    raise ValueError(f"програма {program} не підтримує запис")
+
+
+def _parse_enum_value(value: object, options: dict[int, str]) -> int:
+    if isinstance(value, int):
+        if value in options:
+            return value
+        raise ValueError(f"невідомий код {value}")
+    text = str(value).strip()
+    if text.isdigit():
+        code = int(text)
+        if code in options:
+            return code
+    lowered = text.lower()
+    for code, label in options.items():
+        if lowered == label.lower() or lowered in label.lower():
+            return code
+        token = label.split()[0].lower().strip("(),")
+        if lowered == token:
+            return code
+    raise ValueError(f"невідоме значення '{value}'")
+
+
+def _parse_toggle_value(value: object, options: list[dict[str, object]]) -> int:
+    if isinstance(value, bool):
+        return 1 if value else 0
+    text = str(value).strip()
+    if text.isdigit():
+        return 1 if int(text) else 0
+    for option in options:
+        if text == str(option["label"]):
+            return int(option["value"])
+    raise ValueError(f"невідоме значення '{value}'")
+
+
+def encode_setting_value(spec: SettingSpec, value: object) -> int:
+    kind = str(spec["kind"])
+    if kind == "enum":
+        return _parse_enum_value(value, {int(o["value"]): str(o["label"]) for o in spec["options"]})
+    if kind in {"bit", "toggle"}:
+        return _parse_toggle_value(value, spec["options"])
+    if kind == "voltage":
+        return int(round(float(str(value).replace(",", ".")) * 10)) & 0xFFFF
+    if kind == "amperage":
+        return int(round(float(str(value).replace(",", ".")) * 10)) & 0xFFFF
+    if kind == "frequency":
+        return int(round(float(str(value).replace(",", ".")) * 100)) & 0xFFFF
+    if kind == "percent":
+        return int(float(str(value).replace(",", "."))) & 0xFFFF
+    if kind == "integer":
+        return int(float(str(value).replace(",", "."))) & 0xFFFF
+    raise ValueError(f"невідомий тип налаштування: {kind}")
+
+
+def decode_setting_raw(spec: SettingSpec, raw: int) -> str:
+    kind = str(spec["kind"])
+    if kind == "enum":
+        table = {int(o["value"]): str(o["label"]) for o in spec["options"]}
+        return mapped(raw, table)
+    if kind == "bit":
+        for option in spec["options"]:
+            if int(option["value"]) == (1 if raw else 0):
+                return str(option["label"])
+        return "1" if raw else "0"
+    if kind == "toggle":
+        for option in spec["options"]:
+            if int(option["value"]) == (1 if raw else 0):
+                return str(option["label"])
+        return "1" if raw else "0"
+    if kind == "voltage":
+        return fmt_volt(raw)
+    if kind == "amperage":
+        return fmt_volt(raw)
+    if kind == "frequency":
+        return f"{scale(raw, 0.01, 2):.2f}"
+    if kind == "percent":
+        return fmt_pct(raw)
+    if kind == "integer":
+        return str(i16(raw))
+    return str(raw)
+
+
+def build_writable_settings(data: dict[str, RegisterMap]) -> list[dict[str, object]]:
+    items: list[dict[str, object]] = []
+    for spec in writable_setting_specs(data):
+        register = int(spec["register"])
+        raw = _register_value(data, register)
+        if spec["kind"] == "bit":
+            raw = 1 if raw & (1 << int(spec["bit"])) else 0
+        items.append(
+            {
+                **spec,
+                "value_raw": raw,
+                "value_display": decode_setting_raw(spec, raw if spec["kind"] != "bit" else raw),
+            }
+        )
+    return items
+
+
+def apply_setting_write(
+    client: ModbusRtuClient,
+    data: dict[str, RegisterMap],
+    program: int,
+    value: object,
+) -> dict[str, object]:
+    spec = _find_setting_spec(data, program)
+    register = int(spec["register"])
+    encoded = encode_setting_value(spec, value)
+
+    if spec["kind"] == "bit":
+        current = _register_value(data, register)
+        bit = int(spec["bit"])
+        if encoded:
+            current |= 1 << bit
+        else:
+            current &= ~(1 << bit)
+        client.write_holding(register, current)
+        written = current
+    else:
+        client.write_holding(register, encoded)
+        written = encoded
+
+    time.sleep(PAUSE_BETWEEN_READS)
+    return {
+        "program": program,
+        "register": register,
+        "written": written,
+        "label": spec["label"],
+        "value_display": decode_setting_raw(spec, encoded if spec["kind"] != "bit" else encoded),
+    }
+
+
+def write_setting(args: argparse.Namespace, program: int, value: object) -> dict[str, object]:
+    client = ModbusRtuClient(args.port, args.baud, args.slave, args.timeout)
+    try:
+        data = read_all(client)
+        return apply_setting_write(client, data, program, value)
+    finally:
+        client.close()
+
+
 # --- CLI --------------------------------------------------------------------
 
 
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
-        description="Відображення налаштувань MUST PV18-3224 через COM-порт (Modbus RTU)."
+        description="MUST PV18-3224 — читання та зміна налаштувань через Modbus RTU."
     )
     parser.add_argument("--port", default=DEFAULT_PORT, help="COM-порт (типово COM8)")
     parser.add_argument("--baud", type=int, default=DEFAULT_BAUD, help="Швидкість (типово 19200)")
@@ -495,6 +936,17 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--host", default="127.0.0.1", help="Адреса веб-сервера")
     parser.add_argument("--http-port", type=int, default=8080, dest="http_port", help="Порт веб-сервера")
+    parser.add_argument(
+        "--set",
+        nargs=2,
+        metavar=("PROGRAM", "VALUE"),
+        help="Записати LCD-програму, напр. --set 17 28.4",
+    )
+    parser.add_argument(
+        "--list-settings",
+        action="store_true",
+        help="Показати програми, доступні для запису",
+    )
     return parser.parse_args()
 
 
@@ -550,7 +1002,35 @@ def main() -> int:
         return 0
 
     print(f"MUST PV18-3224  |  {args.port}  |  {args.baud} 8N1  |  slave {args.slave}")
-    print("Лище читання регістрів, нічого не записується.")
+
+    try:
+        if args.list_settings:
+            data = probe_if_needed(args)
+            for item in build_writable_settings(data):
+                prog = int(item["program"])
+                print(
+                    f"[{prog:02d}] {item['label']:<36} "
+                    f"{item['value_display']} {item.get('unit') or ''}  (reg {item['register']})"
+                )
+            return 0
+
+        if args.set:
+            program = int(args.set[0])
+            result = write_setting(args, program, args.set[1])
+            print(
+                f"Записано [{result['program']:02d}] {result['label']} "
+                f"→ reg {result['register']} = {result['written']}"
+            )
+            return 0
+    except ValueError as exc:
+        print(f"Помилка параметра: {exc}", file=sys.stderr)
+        return 3
+    except serial.SerialException as exc:
+        print(f"Не вдалося відкрити {args.port}: {exc}", file=sys.stderr)
+        return 1
+    except ModbusRtuError as exc:
+        print(f"Помилка Modbus: {exc}", file=sys.stderr)
+        return 2
 
     def once() -> None:
         data = probe_if_needed(args)

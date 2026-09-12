@@ -44,6 +44,7 @@ def build_payload(args: argparse.Namespace) -> dict:
     with _read_lock:
         data = core.probe_if_needed(args)
         sections = core.build_sections(data)
+        writable = core.build_writable_settings(data)
 
     def metric(label: str) -> dict:
         row = _find_row(sections, label)
@@ -66,6 +67,7 @@ def build_payload(args: argparse.Namespace) -> dict:
             "slave": args.slave,
         },
         "sections": sections,
+        "writable": writable,
         "metrics": {
             "soc": metric("BMS SOC"),
             "soh": metric("BMS SOH"),
@@ -93,6 +95,27 @@ def build_payload(args: argparse.Namespace) -> dict:
             "grid_w": _parse_num(metric("Потужність мережі")["value"]),
             "batt_w": _parse_num(metric("Потужність АКБ (інвертор)")["value"]),
         },
+    }
+
+
+def write_setting_payload(args: argparse.Namespace, body: dict) -> dict:
+    program = body.get("program")
+    value = body.get("value")
+    if program is None or value is None:
+        raise ValueError("потрібні поля program та value")
+
+    with _read_lock:
+        client = core.ModbusRtuClient(args.port, args.baud, args.slave, args.timeout)
+        try:
+            data = core.read_all(client)
+            result = core.apply_setting_write(client, data, int(program), value)
+        finally:
+            client.close()
+
+    return {
+        "ok": True,
+        "updated": datetime.now().astimezone().isoformat(timespec="seconds"),
+        **result,
     }
 
 
@@ -156,6 +179,28 @@ def make_handler(args: argparse.Namespace):
                     return
 
             self._send_bytes(404, b"Not found", "text/plain; charset=utf-8")
+
+        def do_POST(self) -> None:
+            parsed = urlparse(self.path)
+            if parsed.path != "/api/settings/write":
+                self._send_bytes(404, b"Not found", "text/plain; charset=utf-8")
+                return
+
+            length = int(self.headers.get("Content-Length", "0"))
+            raw = self.rfile.read(length) if length else b"{}"
+            try:
+                body = json.loads(raw.decode("utf-8"))
+                payload = write_setting_payload(args, body)
+                self._send_json(200, payload)
+            except ValueError as exc:
+                self._send_json(400, {"ok": False, "error": "value", "message": str(exc)})
+            except serial.SerialException as exc:
+                self._send_json(
+                    503,
+                    {"ok": False, "error": "serial", "message": f"Не вдалося відкрити {args.port}: {exc}"},
+                )
+            except core.ModbusRtuError as exc:
+                self._send_json(503, {"ok": False, "error": "modbus", "message": str(exc)})
 
     return MustWebHandler
 

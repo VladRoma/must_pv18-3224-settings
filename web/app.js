@@ -1,4 +1,5 @@
-const REFRESH_MS = 5000;
+const RETRY_MS = 5000;
+const CONNECTED_REFRESH_MS = 5 * 60 * 1000;
 const HISTORY_MAX = 720;
 
 const SETTING_SECTIONS = new Set([
@@ -49,6 +50,20 @@ const history = {
 let refreshTimer = null;
 let socChart = null;
 let powerChart = null;
+let latestWritable = [];
+let toastTimer = null;
+let isConnected = false;
+let activeTab = "overview";
+
+function isChartTabActive() {
+  return activeTab === "chart";
+}
+
+function getRefreshDelay() {
+  if (!isConnected) return RETRY_MS;
+  if (isChartTabActive()) return RETRY_MS;
+  return CONNECTED_REFRESH_MS;
+}
 
 function fmtMetric(metric) {
   if (!metric) return "—";
@@ -234,9 +249,35 @@ function updateCharts() {
   }
   powerChart.update();
 
-  const minutes = Math.max(1, Math.round((history.labels.length * REFRESH_MS) / 60000));
+  const interval = getRefreshDelay();
+  const minutes = Math.max(1, Math.round((history.labels.length * interval) / 60000));
   document.getElementById("chart-info").textContent =
     `Точок: ${history.labels.length} · ~${minutes} хв історії · макс. ${HISTORY_MAX}`;
+}
+
+function scheduleRefresh() {
+  refreshTimer = setTimeout(refresh, getRefreshDelay());
+}
+
+function resetRefreshTimer() {
+  if (refreshTimer) {
+    clearTimeout(refreshTimer);
+    refreshTimer = null;
+  }
+  updateRefreshHint();
+  scheduleRefresh();
+}
+
+function updateRefreshHint() {
+  const el = document.getElementById("refresh-hint");
+  if (!el) return;
+  if (!isConnected) {
+    el.textContent = "Повтор підключення: кожні 5 с";
+  } else if (isChartTabActive()) {
+    el.textContent = "Графік: оновлення кожні 5 с · або кнопка ↻";
+  } else {
+    el.textContent = "Автооновлення: кожні 5 хв · або кнопка ↻";
+  }
 }
 
 function updateOverview(payload) {
@@ -276,7 +317,122 @@ function updateOverview(payload) {
     payload.sections,
     new Set(["PV, мережа, навантаження", "Пристрій і поточний стан"])
   );
-  renderTable("table-settings", payload.sections, SETTING_SECTIONS);
+  latestWritable = payload.writable || [];
+  renderSettingsEditor(latestWritable);
+}
+
+function showToast(text, ok = true) {
+  const toast = document.getElementById("settings-toast");
+  toast.textContent = text;
+  toast.className = ok ? "toast ok" : "toast error";
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toast.classList.add("hidden"), 4000);
+}
+
+function inputForSetting(item) {
+  if (item.options && item.options.length) {
+    const select = document.createElement("select");
+    for (const option of item.options) {
+      const opt = document.createElement("option");
+      opt.value = String(option.label);
+      opt.textContent = option.label;
+      if (String(option.label) === String(item.value_display)) opt.selected = true;
+      select.appendChild(opt);
+    }
+    return select;
+  }
+  const input = document.createElement("input");
+  input.type = "number";
+  input.step = item.kind === "frequency" ? "0.01" : item.kind === "integer" || item.kind === "percent" ? "1" : "0.1";
+  input.value = String(item.value_display).replace(/[^\d.,-]/g, "") || "";
+  return input;
+}
+
+function renderSettingsEditor(items) {
+  const root = document.getElementById("settings-editor");
+  if (!items.length) {
+    root.innerHTML = `<div class="card banner">Налаштування для запису недоступні</div>`;
+    return;
+  }
+
+  const bySection = new Map();
+  for (const item of items) {
+    if (!bySection.has(item.section)) bySection.set(item.section, []);
+    bySection.get(item.section).push(item);
+  }
+
+  root.innerHTML = "";
+  for (const [section, rows] of bySection.entries()) {
+    const block = document.createElement("section");
+    block.className = "settings-section";
+    block.innerHTML = `<h3>${section}</h3>`;
+
+    const wrap = document.createElement("div");
+    wrap.className = "settings-wrap";
+
+    const head = document.createElement("div");
+    head.className = "setting-row head";
+    head.innerHTML = "<div>Пр.</div><div>Параметр</div><div>Зараз</div><div>Нове значення</div><div></div>";
+    wrap.appendChild(head);
+
+    for (const item of rows) {
+      const row = document.createElement("div");
+      row.className = "setting-row";
+      row.innerHTML = `
+        <div>[${String(item.program).padStart(2, "0")}]</div>
+        <div>${item.label}</div>
+        <div class="current">${item.value_display}${item.unit ? ` ${item.unit}` : ""}</div>
+      `;
+
+      const inputWrap = document.createElement("div");
+      const input = inputForSetting(item);
+      inputWrap.appendChild(input);
+
+      const btnWrap = document.createElement("div");
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.textContent = "Зберегти";
+      btn.addEventListener("click", () => saveSetting(item, input, btn));
+      btnWrap.appendChild(btn);
+
+      row.appendChild(inputWrap);
+      row.appendChild(btnWrap);
+      wrap.appendChild(row);
+    }
+
+    block.appendChild(wrap);
+    root.appendChild(block);
+  }
+}
+
+async function saveSetting(item, input, button) {
+  const value = input.value;
+  if (!value && value !== "0") {
+    showToast("Введи значення", false);
+    return;
+  }
+  if (!confirm(`Записати [${String(item.program).padStart(2, "0")}] ${item.label} = ${value}?`)) {
+    return;
+  }
+
+  button.disabled = true;
+  try {
+    const res = await fetch("/api/settings/write", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ program: item.program, value }),
+    });
+    const payload = await res.json();
+    if (!payload.ok) {
+      throw new Error(payload.message || "Помилка запису");
+    }
+    showToast(`Записано [${String(item.program).padStart(2, "0")}] ${item.label}`);
+    await refresh();
+  } catch (err) {
+    showToast(err.message || "Помилка запису", false);
+  } finally {
+    button.disabled = false;
+  }
 }
 
 async function refresh() {
@@ -302,12 +458,15 @@ async function refresh() {
     updateOverview(payload);
     pushHistory(payload);
     updateCharts();
+    isConnected = true;
     setStatus("ok", "Підключено");
   } catch (err) {
-    setStatus("error", "Помилка");
+    isConnected = false;
+    setStatus("error", "Немає з'єднання");
     console.error(err);
   } finally {
-    refreshTimer = setTimeout(refresh, REFRESH_MS);
+    updateRefreshHint();
+    scheduleRefresh();
   }
 }
 
@@ -317,7 +476,10 @@ function setupTabs() {
       document.querySelectorAll(".tab").forEach((el) => el.classList.remove("active"));
       document.querySelectorAll(".panel").forEach((el) => el.classList.remove("active"));
       tab.classList.add("active");
-      document.getElementById(`panel-${tab.dataset.tab}`).classList.add("active");
+      const tabId = tab.dataset.tab;
+      document.getElementById(`panel-${tabId}`).classList.add("active");
+      activeTab = tabId;
+      resetRefreshTimer();
     });
   });
 }

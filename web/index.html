@@ -128,13 +128,19 @@
     </section>
 
     <section id="panel-settings" class="panel">
-      <div class="table-wrap" id="table-settings"></div>
+      <div class="card banner">
+        <div class="card-stripe" style="background: var(--warn)"></div>
+        Запис у інвертор · перевір значення перед збереженням · відповідає LCD-програмам
+      </div>
+      <div id="settings-editor"></div>
+      <div id="settings-toast" class="toast hidden"></div>
     </section>
   </main>
 
   <footer>
     <span id="updated-at">Оновлення: —</span>
-    <span>Лише читання · CAN/BMS через інвертор</span>
+    <span id="refresh-hint">—</span>
+    <span>Читання + запис налаштувань · CAN/BMS через інвертор</span>
   </footer>
 
   <script src="/app.js"></script>
