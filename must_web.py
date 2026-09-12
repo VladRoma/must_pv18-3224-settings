@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import json
 import mimetypes
+import socket
 import threading
 from datetime import datetime, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
@@ -159,14 +160,34 @@ def make_handler(args: argparse.Namespace):
     return MustWebHandler
 
 
+def _resolve_web_host(args: argparse.Namespace) -> str:
+    if getattr(args, "lan", False):
+        return "0.0.0.0"
+    return getattr(args, "host", "127.0.0.1")
+
+
+def _guess_lan_ip() -> str | None:
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            sock.connect(("8.8.8.8", 80))
+            return sock.getsockname()[0]
+    except OSError:
+        return None
+
+
 def run_web(args: argparse.Namespace) -> None:
-    host = getattr(args, "host", "127.0.0.1")
+    host = _resolve_web_host(args)
     port = getattr(args, "http_port", 8080)
     handler = make_handler(args)
     server = ThreadingHTTPServer((host, port), handler)
-    url = f"http://{host}:{port}/"
-    print(f"MUST Web Dashboard  →  {url}")
-    print(f"COM {args.port}  ·  {args.baud} 8N1  ·  slave {args.slave}")
+    print(f"MUST Web Dashboard  →  http://127.0.0.1:{port}/")
+    if host == "0.0.0.0":
+        lan_ip = _guess_lan_ip()
+        if lan_ip:
+            print(f"Телефон у Wi‑Fi       →  http://{lan_ip}:{port}/")
+        else:
+            print(f"Локальна мережа       →  http://<IP-Pi>:{port}/")
+    print(f"Serial {args.port}  ·  {args.baud} 8N1  ·  slave {args.slave}")
     print("Ctrl+C — зупинити сервер")
     try:
         server.serve_forever()

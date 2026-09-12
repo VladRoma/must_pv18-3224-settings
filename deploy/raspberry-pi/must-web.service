@@ -1,0 +1,17 @@
+[Unit]
+Description=MUST PV18-3224 web dashboard
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=pi
+Group=dialout
+WorkingDirectory=/home/pi/must_pv18-3224-settings
+Environment=PYTHONUNBUFFERED=1
+ExecStart=/home/pi/must_pv18-3224-settings/.venv/bin/python must_settings.py --web --lan --port /dev/ttyUSB0 --baud 19200 --slave 4 --http-port 8080
+Restart=on-failure
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

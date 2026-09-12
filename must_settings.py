@@ -488,6 +488,11 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--gui", action="store_true", help="Відкрити віконну програму (tkinter)")
     parser.add_argument("--web", action="store_true", help="Веб-інтерфейс (http://127.0.0.1:8080)")
+    parser.add_argument(
+        "--lan",
+        action="store_true",
+        help="Веб на 0.0.0.0 — доступ з телефону/планшета у локальній мережі",
+    )
     parser.add_argument("--host", default="127.0.0.1", help="Адреса веб-сервера")
     parser.add_argument("--http-port", type=int, default=8080, dest="http_port", help="Порт веб-сервера")
     return parser.parse_args()
