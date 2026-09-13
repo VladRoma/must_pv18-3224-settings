@@ -22,6 +22,7 @@ from urllib.parse import urlparse
 import serial
 
 import must_battery
+import must_mongodb
 import must_settings as core
 
 WEB_DIR = Path(__file__).resolve().parent / "web"
@@ -155,6 +156,7 @@ def build_payload(args: argparse.Namespace) -> dict:
     inverter_error: str | None = None
     bms_only = bool(getattr(args, "bms_only", False))
     bms_host = getattr(args, "bms_host", None)
+    data: dict[str, core.RegisterMap] | None = None
 
     if not bms_only:
         try:
@@ -247,7 +249,7 @@ def build_payload(args: argparse.Namespace) -> dict:
             metrics["batt_v"] = metrics["bms_v"]
             metrics["batt_i"] = metrics["bms_i"]
 
-    return {
+    payload = {
         "ok": True,
         "updated": datetime.now().astimezone().isoformat(timespec="seconds"),
         "connection": {
@@ -265,6 +267,8 @@ def build_payload(args: argparse.Namespace) -> dict:
         "numbers": numbers,
         "battery": battery,
     }
+    must_mongodb.try_record(args, data, payload)
+    return payload
 
 
 def write_setting_payload(args: argparse.Namespace, body: dict) -> dict:
@@ -510,6 +514,9 @@ def run_web(args: argparse.Namespace) -> None:
                 f"АКБ Wi‑Fi {bms_host}:"
                 f"{getattr(args, 'bms_port', must_battery.DEFAULT_PORT)}"
             )
+    mongo_line = must_mongodb.status_line(args)
+    if mongo_line:
+        print(mongo_line)
     print("Ctrl+C — зупинити сервер")
     try:
         server.serve_forever()

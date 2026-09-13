@@ -7,6 +7,7 @@ import argparse
 import struct
 import sys
 import time
+from datetime import datetime
 
 import serial
 
@@ -975,6 +976,23 @@ def parse_args() -> argparse.Namespace:
         default="",
         help="Пароль вкладки Налаштування (або змінна MUST_SETTINGS_PASSWORD)",
     )
+    parser.add_argument(
+        "--mongo",
+        action="store_true",
+        help="Записувати телеметрію в MongoDB Atlas (.env або MONGODB_PASSWORD)",
+    )
+    parser.add_argument("--mongo-uri", dest="mongo_uri", help="URI MongoDB Atlas")
+    parser.add_argument(
+        "--mongo-db",
+        dest="mongo_db",
+        default="",
+        help="Ім'я бази MongoDB (типово must_pv18)",
+    )
+    parser.add_argument(
+        "--mongo-verbose",
+        action="store_true",
+        help="Логувати кожен запис у MongoDB",
+    )
     return parser.parse_args()
 
 
@@ -1086,6 +1104,24 @@ def main() -> int:
     def once() -> None:
         data = probe_if_needed(args)
         build_report(data)
+        import must_mongodb
+
+        if must_mongodb.mongo_enabled(args):
+            sections = build_sections(data)
+            payload = {
+                "ok": True,
+                "updated": datetime.now().astimezone().isoformat(timespec="seconds"),
+                "sections": sections,
+                "metrics": {},
+                "numbers": {},
+                "battery": None,
+                "connection": {
+                    "port": args.port,
+                    "baud": args.baud,
+                    "slave": args.slave,
+                },
+            }
+            must_mongodb.try_record(args, data, payload)
         print()
 
     try:
