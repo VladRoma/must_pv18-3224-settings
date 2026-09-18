@@ -81,6 +81,21 @@ header {
   gap: 12px;
 }
 
+.hub-link {
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: #1e293b;
+  color: var(--info);
+  text-decoration: none;
+  font-weight: 700;
+  font-size: 0.88rem;
+  border: 1px solid var(--border);
+}
+
+.hub-link:hover {
+  background: #243044;
+}
+
 .pill {
   padding: 8px 14px;
   border-radius: 999px;

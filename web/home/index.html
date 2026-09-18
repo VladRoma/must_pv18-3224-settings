@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0a0f14">
+  <title>Дім · огляд</title>
+  <link rel="stylesheet" href="/home/style.css">
+</head>
+<body>
+  <header class="top">
+    <div>
+      <p class="eyebrow">MUST · АКБ · ванна</p>
+      <h1>Домашній огляд</h1>
+    </div>
+    <div id="status-pill" class="pill">● оновлення…</div>
+  </header>
+
+  <main class="layout">
+    <section id="vent-card" class="vent-card card">
+      <div class="vent-icon" aria-hidden="true">🌬</div>
+      <div class="vent-body">
+        <p class="vent-label">Провітрювання</p>
+        <h2 id="vent-title">—</h2>
+        <p id="vent-detail" class="vent-detail">—</p>
+      </div>
+      <div id="vent-badge" class="vent-badge">—</div>
+    </section>
+
+    <section class="grid">
+      <article class="mini card">
+        <h3>Інвертор</h3>
+        <p class="big" id="must-state">—</p>
+        <ul class="kv">
+          <li><span>SOC</span><strong id="must-soc">—</strong></li>
+          <li><span>PV</span><strong id="must-pv">—</strong></li>
+          <li><span>Навантаження</span><strong id="must-load">—</strong></li>
+          <li><span>АКБ</span><strong id="must-batt">—</strong></li>
+          <li><span>BMS</span><strong id="must-bms">—</strong></li>
+        </ul>
+      </article>
+
+      <article class="mini card">
+        <h3>АКБ Wi‑Fi</h3>
+        <p class="big" id="bat-state">—</p>
+        <ul class="kv">
+          <li><span>SOC</span><strong id="bat-soc">—</strong></li>
+          <li><span>Потужність</span><strong id="bat-power">—</strong></li>
+          <li><span>Напруга</span><strong id="bat-v">—</strong></li>
+          <li><span>Струм</span><strong id="bat-i">—</strong></li>
+        </ul>
+      </article>
+
+      <article class="mini card">
+        <h3>Ванна</h3>
+        <p class="big" id="bath-main">—</p>
+        <ul class="kv">
+          <li><span>Температура</span><strong id="bath-t">—</strong></li>
+          <li><span>Вологість</span><strong id="bath-h">—</strong></li>
+          <li><span>Точка роси</span><strong id="bath-dew">—</strong></li>
+          <li><span>Статус</span><strong id="bath-status">—</strong></li>
+        </ul>
+      </article>
+    </section>
+
+    <nav class="nav-actions">
+      <a class="btn btn-must" href="/">MUST · інвертор</a>
+      <a class="btn btn-bath" href="/bathroom/">Ванна · DHT11</a>
+    </nav>
+
+    <p id="updated-line" class="updated">—</p>
+  </main>
+
+  <script src="/home/app.js"></script>
+</body>
+</html>

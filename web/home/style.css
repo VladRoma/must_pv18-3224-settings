@@ -1,0 +1,258 @@
+:root {
+  --bg: #0a0f14;
+  --card: #121a24;
+  --border: #243041;
+  --text: #eef2f7;
+  --muted: #8b9cb0;
+  --must: #f59e0b;
+  --battery: #34d399;
+  --bath: #5eead4;
+  --ok: #4ade80;
+  --warn: #fb923c;
+  --bad: #f87171;
+  --radius: 16px;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: radial-gradient(900px 500px at 20% -10%, #1a2838 0%, var(--bg) 55%);
+  color: var(--text);
+  font-family: "Segoe UI", system-ui, sans-serif;
+}
+
+.top {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 20px 20px 8px;
+  max-width: 880px;
+  margin: 0 auto;
+}
+
+.eyebrow {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.82rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.top h1 {
+  margin: 4px 0 0;
+  font-size: 1.6rem;
+}
+
+.pill {
+  padding: 8px 12px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  font-size: 0.8rem;
+  color: var(--muted);
+  white-space: nowrap;
+}
+
+.pill.live {
+  color: var(--ok);
+  border-color: rgba(74, 222, 128, 0.35);
+}
+
+.pill.err {
+  color: var(--bad);
+}
+
+.layout {
+  max-width: 880px;
+  margin: 0 auto;
+  padding: 8px 16px 28px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
+}
+
+.vent-card {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 14px;
+  align-items: center;
+  padding: 18px 18px;
+  border-left: 4px solid var(--bath);
+}
+
+.vent-card.ok {
+  border-left-color: var(--ok);
+}
+
+.vent-card.watch {
+  border-left-color: var(--warn);
+}
+
+.vent-card.soon,
+.vent-card.now {
+  border-left-color: var(--bad);
+}
+
+.vent-card.offline {
+  border-left-color: var(--muted);
+}
+
+.vent-icon {
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.vent-label {
+  margin: 0;
+  color: var(--muted);
+  font-size: 0.78rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.vent-body h2 {
+  margin: 4px 0 6px;
+  font-size: 1.35rem;
+}
+
+.vent-detail {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.45;
+  font-size: 0.95rem;
+}
+
+.vent-badge {
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid var(--border);
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-align: center;
+  min-width: 88px;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.mini {
+  padding: 14px 14px 12px;
+}
+
+.mini h3 {
+  margin: 0 0 8px;
+  font-size: 0.78rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.mini:nth-child(1) h3 {
+  color: var(--must);
+}
+
+.mini:nth-child(2) h3 {
+  color: var(--battery);
+}
+
+.mini:nth-child(3) h3 {
+  color: var(--bath);
+}
+
+.big {
+  margin: 0 0 10px;
+  font-size: 1.15rem;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.kv {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.kv li {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 6px 0;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 0.88rem;
+}
+
+.kv span {
+  color: var(--muted);
+}
+
+.nav-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 14px 16px;
+  border-radius: 14px;
+  text-decoration: none;
+  font-weight: 700;
+  border: 1px solid var(--border);
+  transition: transform 0.12s ease, border-color 0.12s ease;
+}
+
+.btn:active {
+  transform: scale(0.98);
+}
+
+.btn-must {
+  color: #1a1200;
+  background: linear-gradient(135deg, #fcd34d, var(--must));
+  border-color: rgba(245, 158, 11, 0.5);
+}
+
+.btn-bath {
+  color: #042f2e;
+  background: linear-gradient(135deg, #99f6e4, var(--bath));
+  border-color: rgba(94, 234, 212, 0.45);
+}
+
+.updated {
+  margin: 0;
+  text-align: center;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+@media (max-width: 760px) {
+  .grid {
+    grid-template-columns: 1fr;
+  }
+
+  .vent-card {
+    grid-template-columns: auto 1fr;
+  }
+
+  .vent-badge {
+    grid-column: 1 / -1;
+    width: 100%;
+  }
+}

@@ -305,6 +305,7 @@ body {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: 12px;
   font-size: 0.85rem;
   color: var(--muted);
 }

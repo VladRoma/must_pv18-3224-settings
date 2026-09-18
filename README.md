@@ -194,9 +194,11 @@ BATHROOM_STALE_SEC=120
 python must_settings.py --web --lan
 ```
 
-3. Відкрий сторінку: `http://<IP-Pi>:8080/bathroom/`
+3. Зведений огляд (інвертор + АКБ + ванна + провітрювання): `http://<IP-Pi>:8080/home/`
 
-4. Прошивка ESP32: каталог `esp32/bathroom_dht11/` — скопіюй `config.example.h` → `config.h`, вкажи Wi‑Fi, IP Pi і той самий `INGEST_TOKEN`.
+4. Сторінка ванни: `http://<IP-Pi>:8080/bathroom/`
+
+5. Прошивка ESP32: каталог `esp32/bathroom_dht11/` — скопіюй `config.example.h` → `config.h`, вкажи Wi‑Fi, IP Pi і той самий `INGEST_TOKEN`.
 
 Тест без ESP32 (curl):
 
@@ -216,6 +218,8 @@ curl -X POST "http://127.0.0.1:8080/api/bathroom/ingest" \
 | `must_web.py` | Веб-сервер + API |
 | `web/` | HTML/CSS/JS дашборд |
 | `deploy/raspberry-pi/` | Автозапуск на Pi + Tailscale |
+| `web/home/` | Зведений дашборд (MUST + АКБ + ванна) |
 | `web/bathroom/` | Сторінка ванни (температура / вологість) |
+| `must_home.py` | Порада щодо провітрювання + API summary |
 | `must_bathroom.py` | API та буфер показників з ESP32 |
 | `esp32/bathroom_dht11/` | Прошивка ESP32 + DHT11 |

@@ -23,6 +23,7 @@ import serial
 
 import must_battery
 import must_bathroom
+import must_home
 import must_mongodb
 import must_settings as core
 
@@ -352,6 +353,26 @@ def make_handler(args: argparse.Namespace, auth: SettingsAuth):
                 self._send_json(200, must_bathroom.build_api_payload())
                 return
 
+            if route == "/api/home/summary":
+                must_payload: dict | None = None
+                must_error: str | None = None
+                try:
+                    must_payload = build_payload(args)
+                except serial.SerialException as exc:
+                    must_error = f"Serial: {exc}"
+                except core.ModbusRtuError as exc:
+                    must_error = str(exc)
+                except must_battery.BatteryError as exc:
+                    must_error = str(exc)
+                except Exception as exc:
+                    must_error = str(exc)
+                self._send_json(200, must_home.build_summary(must_payload, must_error))
+                return
+
+            if route in ("/home", "/home/"):
+                self._serve_file("home/index.html")
+                return
+
             if route in ("/bathroom", "/bathroom/"):
                 self._serve_file("bathroom/index.html")
                 return
@@ -543,10 +564,12 @@ def run_web(args: argparse.Namespace) -> None:
         if ts_ip:
             print(f"Tailscale             →  http://{ts_ip}:{port}/")
     print("Вкладка «Налаштування» захищена паролем.")
+    print(f"Огляд (дім)           →  http://127.0.0.1:{port}/home/")
     print(f"Ванна (DHT11)         →  http://127.0.0.1:{port}/bathroom/")
     if host == "0.0.0.0":
         lan_ip = _guess_lan_ip()
         if lan_ip:
+            print(f"Огляд у Wi‑Fi         →  http://{lan_ip}:{port}/home/")
             print(f"Ванна у Wi‑Fi         →  http://{lan_ip}:{port}/bathroom/")
     if getattr(args, "bms_only", False):
         print(
