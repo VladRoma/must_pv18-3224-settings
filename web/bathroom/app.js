@@ -87,6 +87,8 @@ function updateChart(history) {
           x: { ticks: { color: "#8aa8c4", maxRotation: 0 }, grid: { color: "rgba(255,255,255,0.06)" } },
           y: {
             position: "left",
+            suggestedMin: 10,
+            suggestedMax: 35,
             ticks: { color: "#ffb86b" },
             grid: { color: "rgba(255,255,255,0.06)" },
           },

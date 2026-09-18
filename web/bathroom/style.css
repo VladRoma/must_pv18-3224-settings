@@ -293,6 +293,11 @@ body {
   letter-spacing: 0.05em;
 }
 
+.chart-box {
+  position: relative;
+  height: 240px;
+}
+
 .foot {
   max-width: 720px;
   margin: 0 auto 24px;
