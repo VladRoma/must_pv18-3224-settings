@@ -218,6 +218,7 @@ __marimo__/
 .streamlit/secrets.toml
 
 .must-settings-password
+esp32/bathroom_dht11/config.h
 .must-web.env
 
 # Local research

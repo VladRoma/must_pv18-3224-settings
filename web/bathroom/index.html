@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="theme-color" content="#0a1628">
+  <title>Ванна · температура та вологість</title>
+  <link rel="stylesheet" href="/bathroom/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.6/dist/chart.umd.min.js"></script>
+</head>
+<body>
+  <div class="steam steam-a" aria-hidden="true"></div>
+  <div class="steam steam-b" aria-hidden="true"></div>
+
+  <header class="top">
+    <div class="top-title">
+      <span class="droplet" aria-hidden="true">💧</span>
+      <div>
+        <h1>Ванна</h1>
+        <p id="subtitle">ESP32 · DHT11</p>
+      </div>
+    </div>
+    <div id="link-pill" class="pill offline">● офлайн</div>
+  </header>
+
+  <main class="layout">
+    <section class="hero card">
+      <p id="comfort-title" class="comfort-title">Очікування даних</p>
+      <p id="comfort-hint" class="comfort-hint">Підключи ESP32 до Wi‑Fi та надішли показники на Raspberry Pi.</p>
+    </section>
+
+    <section class="metrics">
+      <article class="gauge card">
+        <div class="gauge-ring temp" id="ring-temp">
+          <div class="gauge-inner">
+            <span class="gauge-value" id="temp-value">—</span>
+            <span class="gauge-unit">°C</span>
+          </div>
+        </div>
+        <h2>Температура</h2>
+        <p class="gauge-meta" id="temp-meta">—</p>
+      </article>
+
+      <article class="gauge card">
+        <div class="gauge-ring hum" id="ring-hum">
+          <div class="gauge-inner">
+            <span class="gauge-value" id="hum-value">—</span>
+            <span class="gauge-unit">%</span>
+          </div>
+        </div>
+        <h2>Вологість</h2>
+        <p class="gauge-meta" id="hum-meta">—</p>
+      </article>
+    </section>
+
+    <section class="extras card">
+      <div class="extra-row">
+        <span>Точка роси</span>
+        <strong id="dew-value">— °C</strong>
+      </div>
+      <div class="extra-row">
+        <span>Оновлено</span>
+        <strong id="updated-at">—</strong>
+      </div>
+      <div class="extra-row">
+        <span>Пристрій</span>
+        <strong id="device-name">—</strong>
+      </div>
+    </section>
+
+    <section class="chart-card card">
+      <h2>Історія (останні точки)</h2>
+      <canvas id="history-chart" height="140"></canvas>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <a href="/">← MUST інвертор</a>
+    <span id="refresh-note">оновлення кожні 5 с</span>
+  </footer>
+
+  <script src="/bathroom/app.js"></script>
+</body>
+</html>

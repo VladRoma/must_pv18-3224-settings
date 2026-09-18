@@ -1,0 +1,335 @@
+:root {
+  --bg0: #060d18;
+  --bg1: #0a1628;
+  --card: rgba(18, 32, 52, 0.82);
+  --border: rgba(120, 180, 220, 0.18);
+  --text: #eef6ff;
+  --muted: #8aa8c4;
+  --temp: #ffb86b;
+  --hum: #5eead4;
+  --ok: #4ade80;
+  --warn: #fb923c;
+  --bad: #f87171;
+  --dry: #93c5fd;
+  --radius: 20px;
+  --shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  color: var(--text);
+  font-family: "Segoe UI", system-ui, sans-serif;
+  background: radial-gradient(1200px 600px at 50% -10%, #143052 0%, var(--bg0) 55%, #040810 100%);
+}
+
+body {
+  position: relative;
+  overflow-x: hidden;
+}
+
+.steam {
+  position: fixed;
+  width: 280px;
+  height: 280px;
+  border-radius: 50%;
+  filter: blur(48px);
+  opacity: 0.22;
+  pointer-events: none;
+  z-index: 0;
+  animation: drift 18s ease-in-out infinite alternate;
+}
+
+.steam-a {
+  background: #38bdf8;
+  top: 8%;
+  left: -8%;
+}
+
+.steam-b {
+  background: #2dd4bf;
+  bottom: 10%;
+  right: -12%;
+  animation-delay: -6s;
+}
+
+@keyframes drift {
+  from {
+    transform: translate(0, 0) scale(1);
+  }
+  to {
+    transform: translate(24px, -18px) scale(1.08);
+  }
+}
+
+.top,
+.layout,
+.foot {
+  position: relative;
+  z-index: 1;
+}
+
+.top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 20px 20px 8px;
+  max-width: 720px;
+  margin: 0 auto;
+}
+
+.top-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.droplet {
+  font-size: 2rem;
+  filter: drop-shadow(0 4px 12px rgba(94, 234, 212, 0.35));
+}
+
+.top h1 {
+  margin: 0;
+  font-size: 1.65rem;
+  letter-spacing: 0.02em;
+}
+
+.top p {
+  margin: 2px 0 0;
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+.pill {
+  padding: 8px 14px;
+  border-radius: 999px;
+  font-size: 0.82rem;
+  font-weight: 600;
+  border: 1px solid var(--border);
+  background: rgba(0, 0, 0, 0.25);
+  white-space: nowrap;
+}
+
+.pill.online {
+  color: var(--ok);
+  border-color: rgba(74, 222, 128, 0.35);
+}
+
+.pill.offline {
+  color: var(--bad);
+  border-color: rgba(248, 113, 113, 0.35);
+}
+
+.layout {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 8px 16px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.card {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  backdrop-filter: blur(10px);
+}
+
+.hero {
+  padding: 18px 20px;
+  border-left: 4px solid var(--hum);
+}
+
+.comfort-title {
+  margin: 0;
+  font-size: 1.25rem;
+  font-weight: 700;
+}
+
+.comfort-hint {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.95rem;
+  line-height: 1.45;
+}
+
+.hero.ok {
+  border-left-color: var(--ok);
+}
+
+.hero.warn,
+.hero.hot,
+.hero.cold {
+  border-left-color: var(--warn);
+}
+
+.hero.critical {
+  border-left-color: var(--bad);
+}
+
+.hero.dry {
+  border-left-color: var(--dry);
+}
+
+.metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.gauge {
+  padding: 18px 14px 16px;
+  text-align: center;
+}
+
+.gauge h2 {
+  margin: 12px 0 4px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.gauge-meta {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+}
+
+.gauge-ring {
+  --pct: 0;
+  width: 132px;
+  height: 132px;
+  margin: 0 auto;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  background: conic-gradient(
+    var(--ring-color) calc(var(--pct) * 1%),
+    rgba(255, 255, 255, 0.06) 0
+  );
+  position: relative;
+}
+
+.gauge-ring::after {
+  content: "";
+  position: absolute;
+  inset: 10px;
+  border-radius: 50%;
+  background: rgba(8, 16, 28, 0.92);
+  border: 1px solid var(--border);
+}
+
+.gauge-inner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  line-height: 1;
+}
+
+.gauge-value {
+  font-size: 2rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.gauge-unit {
+  font-size: 0.85rem;
+  color: var(--muted);
+  margin-top: 2px;
+}
+
+.gauge-ring.temp {
+  --ring-color: var(--temp);
+}
+
+.gauge-ring.hum {
+  --ring-color: var(--hum);
+}
+
+.extras {
+  padding: 6px 18px;
+}
+
+.extra-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  font-size: 0.95rem;
+}
+
+.extra-row:last-child {
+  border-bottom: none;
+}
+
+.extra-row span {
+  color: var(--muted);
+}
+
+.chart-card {
+  padding: 16px 16px 12px;
+}
+
+.chart-card h2 {
+  margin: 0 0 12px;
+  font-size: 0.95rem;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.foot {
+  max-width: 720px;
+  margin: 0 auto 24px;
+  padding: 0 20px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.foot a {
+  color: var(--hum);
+  text-decoration: none;
+}
+
+.foot a:hover {
+  text-decoration: underline;
+}
+
+@media (max-width: 520px) {
+  .metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .gauge-ring {
+    width: 150px;
+    height: 150px;
+  }
+}
+
+@media (min-width: 900px) {
+  .top h1 {
+    font-size: 1.85rem;
+  }
+
+  .layout {
+    padding-bottom: 40px;
+  }
+}

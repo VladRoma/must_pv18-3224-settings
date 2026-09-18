@@ -171,6 +171,40 @@ IP Pi в Tailscale: на Pi виконай `tailscale ip -4`.
 
 Інвертор і батарея лишаються в домашній Wi‑Fi. Pi читає їх локально, а ти дивишся сторінку через Tailscale.
 
+## Ванна · ESP32 + DHT11
+
+Окрема сторінка температури та вологості: **ESP32-CAM (без камери)** читає **DHT11** і по Wi‑Fi шле дані на **Raspberry Pi** (той самий веб-сервер MUST).
+
+```text
+DHT11 → ESP32 → Wi‑Fi → POST /api/bathroom/ingest → Pi → /bathroom/
+```
+
+1. На Pi у `.env` (опційно, для захисту):
+
+```env
+BATHROOM_INGEST_TOKEN=довгий_секрет
+BATHROOM_STALE_SEC=120
+```
+
+2. Запусти веб на Pi:
+
+```bash
+python must_settings.py --web --lan
+```
+
+3. Відкрий сторінку: `http://<IP-Pi>:8080/bathroom/`
+
+4. Прошивка ESP32: каталог `esp32/bathroom_dht11/` — скопіюй `config.example.h` → `config.h`, вкажи Wi‑Fi, IP Pi і той самий `INGEST_TOKEN`.
+
+Тест без ESP32 (curl):
+
+```bash
+curl -X POST "http://127.0.0.1:8080/api/bathroom/ingest" \
+  -H "Content-Type: application/json" \
+  -H "X-Bathroom-Token: довгий_секрет" \
+  -d '{"temperature_c":24.2,"humidity_pct":62}'
+```
+
 ## Структура проєкту
 
 | Файл | Призначення |
@@ -180,3 +214,6 @@ IP Pi в Tailscale: на Pi виконай `tailscale ip -4`.
 | `must_web.py` | Веб-сервер + API |
 | `web/` | HTML/CSS/JS дашборд |
 | `deploy/raspberry-pi/` | Автозапуск на Pi + Tailscale |
+| `web/bathroom/` | Сторінка ванни (температура / вологість) |
+| `must_bathroom.py` | API та буфер показників з ESP32 |
+| `esp32/bathroom_dht11/` | Прошивка ESP32 + DHT11 |

@@ -22,6 +22,7 @@ from urllib.parse import urlparse
 import serial
 
 import must_battery
+import must_bathroom
 import must_mongodb
 import must_settings as core
 
@@ -347,6 +348,14 @@ def make_handler(args: argparse.Namespace, auth: SettingsAuth):
                 self._send_json(200, {"ok": True, "authenticated": self._authed()})
                 return
 
+            if route == "/api/bathroom/data":
+                self._send_json(200, must_bathroom.build_api_payload())
+                return
+
+            if route in ("/bathroom", "/bathroom/"):
+                self._serve_file("bathroom/index.html")
+                return
+
             if route == "/api/data":
                 try:
                     payload = build_payload(args)
@@ -391,6 +400,28 @@ def make_handler(args: argparse.Namespace, auth: SettingsAuth):
         def do_POST(self) -> None:
             parsed = urlparse(self.path)
             route = parsed.path
+
+            if route == "/api/bathroom/ingest":
+                query = parsed.query or ""
+                token_q = ""
+                if "token=" in query:
+                    for part in query.split("&"):
+                        if part.startswith("token="):
+                            token_q = part[6:]
+                            break
+                if not must_bathroom.check_ingest_auth(self.headers, token_q):
+                    self._send_json(
+                        401,
+                        {"ok": False, "error": "auth", "message": "Невірний або відсутній токен"},
+                    )
+                    return
+                try:
+                    body = self._read_json()
+                    payload = must_bathroom.ingest_reading(body, self.client_address[0])
+                    self._send_json(200, payload)
+                except ValueError as exc:
+                    self._send_json(400, {"ok": False, "error": "value", "message": str(exc)})
+                return
 
             if route == "/api/auth/login":
                 try:
@@ -501,6 +532,11 @@ def run_web(args: argparse.Namespace) -> None:
         if ts_ip:
             print(f"Tailscale             →  http://{ts_ip}:{port}/")
     print("Вкладка «Налаштування» захищена паролем.")
+    print(f"Ванна (DHT11)         →  http://127.0.0.1:{port}/bathroom/")
+    if host == "0.0.0.0":
+        lan_ip = _guess_lan_ip()
+        if lan_ip:
+            print(f"Ванна у Wi‑Fi         →  http://{lan_ip}:{port}/bathroom/")
     if getattr(args, "bms_only", False):
         print(
             f"АКБ Wi‑Fi {getattr(args, 'bms_host', '—')}:"
