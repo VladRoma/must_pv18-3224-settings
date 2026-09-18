@@ -218,6 +218,7 @@ __marimo__/
 .streamlit/secrets.toml
 
 .must-settings-password
+.must-bathroom-token
 esp32/bathroom_dht11/config.h
 .must-web.env
 

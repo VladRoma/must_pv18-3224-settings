@@ -179,12 +179,14 @@ IP Pi в Tailscale: на Pi виконай `tailscale ip -4`.
 DHT11 → ESP32 → Wi‑Fi → POST /api/bathroom/ingest → Pi → /bathroom/
 ```
 
-1. На Pi у `.env` (опційно, для захисту):
+1. Токен для ESP32 **обов'язковий**. Задай у `.env` або `.must-web.env` на Pi:
 
 ```env
 BATHROOM_INGEST_TOKEN=довгий_секрет
 BATHROOM_STALE_SEC=120
 ```
+
+Якщо не задано — при старті веб-сервера генерується автоматично (файл `.must-bathroom-token`, рядок у консолі / `journalctl`).
 
 2. Запусти веб на Pi:
 

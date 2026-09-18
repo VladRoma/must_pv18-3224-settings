@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import math
 import os
+import secrets
 import threading
 import time
 from datetime import datetime, timezone
@@ -18,6 +19,7 @@ _history: list[dict[str, Any]] = []
 
 DEFAULT_STALE_SEC = 120
 MAX_HISTORY = 576  # ~48 год при інтервалі 5 хв
+TOKEN_FILE = Path(__file__).resolve().parent / ".must-bathroom-token"
 
 
 def load_env() -> None:
@@ -40,7 +42,32 @@ def load_env() -> None:
 
 def ingest_token() -> str:
     load_env()
-    return (os.environ.get("BATHROOM_INGEST_TOKEN") or "").strip()
+    env = (os.environ.get("BATHROOM_INGEST_TOKEN") or "").strip()
+    if env:
+        return env
+    if TOKEN_FILE.is_file():
+        lines = TOKEN_FILE.read_text(encoding="utf-8").strip().splitlines()
+        if lines and lines[0].strip():
+            return lines[0].strip()
+    return ""
+
+
+def ensure_bathroom_ingest_token() -> str:
+    """Обов'язковий токен для POST /api/bathroom/ingest (env, .env або автогенерація)."""
+    token = ingest_token()
+    if token:
+        return token
+    token = secrets.token_urlsafe(16).replace("-", "").replace("_", "")[:16]
+    TOKEN_FILE.write_text(token + "\n", encoding="utf-8")
+    try:
+        TOKEN_FILE.chmod(0o600)
+    except OSError:
+        pass
+    os.environ["BATHROOM_INGEST_TOKEN"] = token
+    print(f"Токен ESP32 (ванна):     {token}")
+    print(f"Скопіюй у config.h → INGEST_TOKEN, або задай BATHROOM_INGEST_TOKEN у .env")
+    print(f"Файл: {TOKEN_FILE}")
+    return token
 
 
 def stale_seconds() -> int:
@@ -171,7 +198,7 @@ def build_api_payload() -> dict[str, Any]:
 def check_ingest_auth(headers: Any, token_arg: str | None) -> bool:
     expected = ingest_token()
     if not expected:
-        return True
+        return False
     got = (token_arg or "").strip()
     if not got:
         got = (headers.get("X-Bathroom-Token") or headers.get("x-bathroom-token") or "").strip()

@@ -409,10 +409,20 @@ def make_handler(args: argparse.Namespace, auth: SettingsAuth):
                         if part.startswith("token="):
                             token_q = part[6:]
                             break
+                if not must_bathroom.ingest_token():
+                    self._send_json(
+                        503,
+                        {
+                            "ok": False,
+                            "error": "config",
+                            "message": "BATHROOM_INGEST_TOKEN не налаштовано на сервері",
+                        },
+                    )
+                    return
                 if not must_bathroom.check_ingest_auth(self.headers, token_q):
                     self._send_json(
                         401,
-                        {"ok": False, "error": "auth", "message": "Невірний або відсутній токен"},
+                        {"ok": False, "error": "auth", "message": "Невірний або відсутній X-Bathroom-Token"},
                     )
                     return
                 try:
@@ -517,6 +527,7 @@ def _guess_tailscale_ip() -> str | None:
 def run_web(args: argparse.Namespace) -> None:
     password = ensure_settings_password(args)
     auth = SettingsAuth(password)
+    must_bathroom.ensure_bathroom_ingest_token()
     host = _resolve_web_host(args)
     port = getattr(args, "http_port", 8080)
     handler = make_handler(args, auth)
