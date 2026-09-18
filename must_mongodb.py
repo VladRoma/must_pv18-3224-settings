@@ -16,6 +16,7 @@ _ENV_LOADED = False
 
 DEFAULT_DB = "must_pv18"
 DEFAULT_CLUSTER_URI = "mongodb+srv://userHome:{password}@cluster0.ehywaos.mongodb.net/"
+DEFAULT_MONGO_INTERVAL_SEC = 600
 
 _client: Any = None
 _db: Any = None
@@ -38,6 +39,17 @@ def load_env() -> None:
             if key and key not in os.environ:
                 os.environ[key] = value
     _ENV_LOADED = True
+
+
+def background_interval_sec() -> int:
+    load_env()
+    raw = (os.environ.get("MONGODB_INTERVAL_SEC") or "").strip()
+    if not raw:
+        return DEFAULT_MONGO_INTERVAL_SEC
+    try:
+        return max(60, int(raw))
+    except ValueError:
+        return DEFAULT_MONGO_INTERVAL_SEC
 
 
 def mongo_enabled(args: Any) -> bool:

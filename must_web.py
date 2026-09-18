@@ -32,6 +32,7 @@ PASSWORD_FILE = Path(__file__).resolve().parent / ".must-settings-password"
 COOKIE_NAME = "must_auth"
 SESSION_MAX_AGE = 12 * 3600
 _read_lock = threading.Lock()
+_mongo_bg_stop = threading.Event()
 
 
 class SettingsAuth:
@@ -152,7 +153,7 @@ def _metric_from(value: object, unit: str, label: str) -> dict:
     return {"label": label, "value": value, "unit": unit}
 
 
-def build_payload(args: argparse.Namespace) -> dict:
+def build_payload(args: argparse.Namespace, *, record_mongo: bool = False) -> dict:
     sections: list[core.Section] = []
     writable: list[dict] = []
     inverter_error: str | None = None
@@ -269,7 +270,8 @@ def build_payload(args: argparse.Namespace) -> dict:
         "numbers": numbers,
         "battery": battery,
     }
-    must_mongodb.try_record(args, data, payload)
+    if record_mongo:
+        must_mongodb.try_record(args, data, payload)
     return payload
 
 
@@ -527,6 +529,33 @@ def _guess_lan_ip() -> str | None:
         return None
 
 
+def _mongo_background_loop(args: argparse.Namespace) -> None:
+    interval = must_mongodb.background_interval_sec()
+    time.sleep(15)
+    while not _mongo_bg_stop.is_set():
+        try:
+            build_payload(args, record_mongo=True)
+            if getattr(args, "mongo_verbose", False):
+                print("[mongo/bg] запис telemetry")
+        except Exception as exc:
+            print(f"[mongo/bg] пропуск: {exc}", file=sys.stderr)
+        if _mongo_bg_stop.wait(interval):
+            break
+
+
+def start_mongo_background(args: argparse.Namespace) -> None:
+    if not must_mongodb.mongo_enabled(args):
+        return
+    _mongo_bg_stop.clear()
+    thread = threading.Thread(
+        target=_mongo_background_loop,
+        args=(args,),
+        name="mongo-background",
+        daemon=True,
+    )
+    thread.start()
+
+
 def _guess_tailscale_ip() -> str | None:
     try:
         result = subprocess.run(
@@ -587,12 +616,17 @@ def run_web(args: argparse.Namespace) -> None:
     mongo_line = must_mongodb.status_line(args)
     if mongo_line:
         print(mongo_line)
+    if must_mongodb.mongo_enabled(args):
+        mins = must_mongodb.background_interval_sec() // 60
+        print(f"MongoDB фоновий запис  →  кожні {mins} хв (лише MUST/АКБ, не ванна)")
+        start_mongo_background(args)
     print("Ctrl+C — зупинити сервер")
     try:
         server.serve_forever()
     except KeyboardInterrupt:
         print("\nЗупинено.")
     finally:
+        _mongo_bg_stop.set()
         server.server_close()
 
 
