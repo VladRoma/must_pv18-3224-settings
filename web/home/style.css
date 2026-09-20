@@ -206,6 +206,27 @@ body {
   border-left: 4px solid #a78bfa;
 }
 
+.pi-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+  margin-top: 4px;
+}
+
+.pi-metric.ok .pi-voltage {
+  color: var(--ok);
+}
+
+.pi-metric.warn .pi-voltage {
+  color: var(--warn);
+}
+
+@media (max-width: 520px) {
+  .pi-metrics {
+    grid-template-columns: 1fr;
+  }
+}
+
 .pi-power-head {
   display: flex;
   justify-content: space-between;
@@ -255,13 +276,6 @@ body {
   line-height: 1.4;
 }
 
-.pi-power.ok .pi-voltage {
-  color: var(--ok);
-}
-
-.pi-power.warn .pi-voltage {
-  color: var(--warn);
-}
 
 .nav-actions {
   display: grid;

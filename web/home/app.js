@@ -48,31 +48,50 @@ function applyBattery(b) {
   el("bat-i").textContent = b.current != null ? `${b.current.toFixed(1)} А` : "—";
 }
 
-function applyPiPower(p) {
-  const card = document.querySelector(".pi-power");
-  const label = el("pi-ext5v-label");
-  const value = el("pi-ext5v-value");
-  const hint = el("pi-ext5v-hint");
+function applyPiMetric(blockId, prefix, reading, okFn) {
+  const block = el(blockId);
+  const label = el(`${prefix}-label`);
+  const value = el(`${prefix}-value`);
+  const hint = el(`${prefix}-hint`);
+  block?.classList.remove("ok", "warn");
 
-  card?.classList.remove("ok", "warn");
-
-  if (!p?.ok || p.volts == null) {
-    label.textContent = p?.label || "Вхідна напруга";
+  if (!reading?.ok || reading.celsius == null && reading.volts == null) {
+    label.textContent = reading?.label || "—";
     value.textContent = "—";
-    hint.textContent =
-      p?.error || "Доступно на Raspberry Pi 5 (vcgencmd pmic_read_adc).";
+    hint.textContent = reading?.error || "—";
     return;
   }
 
-  label.textContent = p.label || "Вхідна напруга";
-  value.textContent = p.volts.toFixed(2);
-  hint.textContent = p.hint || "—";
-
-  if (p.volts >= 4.75 && p.volts <= 5.25) {
-    card?.classList.add("ok");
-  } else {
-    card?.classList.add("warn");
+  label.textContent = reading.label || "—";
+  if (reading.volts != null) {
+    value.textContent = reading.volts.toFixed(2);
+  } else if (reading.celsius != null) {
+    value.textContent = reading.celsius.toFixed(1);
   }
+  hint.textContent = reading.hint || "—";
+
+  if (okFn(reading)) {
+    block?.classList.add("ok");
+  } else {
+    block?.classList.add("warn");
+  }
+}
+
+function applyPi(pi) {
+  const power = pi?.power || pi;
+  const temp = pi?.temperature;
+  applyPiMetric(
+    "pi-power-metric",
+    "pi-ext5v",
+    power,
+    (r) => r.volts >= 4.75 && r.volts <= 5.25,
+  );
+  applyPiMetric(
+    "pi-temp-metric",
+    "pi-temp",
+    temp,
+    (r) => r.celsius < 70,
+  );
 }
 
 function applyBathroom(b) {
@@ -111,7 +130,7 @@ async function refresh() {
     applyMust(data.must);
     applyBattery(data.must?.battery);
     applyBathroom(data.bathroom);
-    applyPiPower(data.pi_power);
+    applyPi(data.pi || { power: data.pi_power });
     el("updated-line").textContent = `Оновлено: ${formatLocal(data.updated)} · наступне через ${POLL_MS / 1000} с`;
 
     pill.textContent = "● live";

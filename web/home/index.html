@@ -65,12 +65,21 @@
 
     <section class="pi-power card">
       <div class="pi-power-head">
-        <h3>Raspberry Pi</h3>
-        <span class="pi-tag">USB‑C · 5 V</span>
+        <h3>Raspberry Pi 5</h3>
+        <span class="pi-tag">живлення · CPU</span>
       </div>
-      <p class="pi-label" id="pi-ext5v-label">Вхідна напруга</p>
-      <p class="pi-voltage"><span id="pi-ext5v-value">—</span><span class="pi-unit">V</span></p>
-      <p class="pi-hint" id="pi-ext5v-hint">—</p>
+      <div class="pi-metrics">
+        <div class="pi-metric" id="pi-power-metric">
+          <p class="pi-label" id="pi-ext5v-label">Вхідна напруга</p>
+          <p class="pi-voltage"><span id="pi-ext5v-value">—</span><span class="pi-unit">V</span></p>
+          <p class="pi-hint" id="pi-ext5v-hint">—</p>
+        </div>
+        <div class="pi-metric" id="pi-temp-metric">
+          <p class="pi-label" id="pi-temp-label">Температура CPU</p>
+          <p class="pi-voltage"><span id="pi-temp-value">—</span><span class="pi-unit">°C</span></p>
+          <p class="pi-hint" id="pi-temp-hint">—</p>
+        </div>
+      </div>
     </section>
 
     <nav class="nav-actions">

@@ -6,6 +6,7 @@ from __future__ import annotations
 import re
 import subprocess
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any
 
 import must_bathroom
@@ -103,6 +104,86 @@ def read_pi_ext5v() -> dict[str, Any]:
         "label": "Вхідна напруга",
         "display": "—",
         "hint": None,
+    }
+
+
+_TEMP_VCGENCMD_RE = re.compile(r"temp=([0-9.]+)'C", re.IGNORECASE)
+_THERMAL_ZONE = Path("/sys/class/thermal/thermal_zone0/temp")
+
+
+def _temp_hint(celsius: float) -> str:
+    if celsius >= 80:
+        return "Дуже гаряче — перевір охолодження або навантаження."
+    if celsius >= 70:
+        return "Тепло — можливе throttling під навантаженням."
+    return "Нормальна температура для Raspberry Pi 5."
+
+
+def read_pi_temperature() -> dict[str, Any]:
+    """Температура CPU Raspberry Pi (vcgencmd або thermal_zone0)."""
+    base = {
+        "label": "Температура CPU",
+        "display": "—",
+        "hint": None,
+        "celsius": None,
+        "raw": None,
+    }
+
+    try:
+        result = subprocess.run(
+            ["vcgencmd", "measure_temp"],
+            capture_output=True,
+            text=True,
+            timeout=3,
+            check=False,
+        )
+        if result.returncode == 0:
+            raw = result.stdout.strip()
+            match = _TEMP_VCGENCMD_RE.search(raw)
+            if match:
+                celsius = round(float(match.group(1)), 1)
+                return {
+                    "ok": True,
+                    "available": True,
+                    "raw": raw,
+                    "celsius": celsius,
+                    "label": base["label"],
+                    "display": f"{celsius:.1f} °C",
+                    "hint": _temp_hint(celsius),
+                    "error": None,
+                }
+    except (OSError, subprocess.SubprocessError):
+        pass
+
+    try:
+        if _THERMAL_ZONE.is_file():
+            millideg = int(_THERMAL_ZONE.read_text(encoding="utf-8").strip())
+            celsius = round(millideg / 1000.0, 1)
+            return {
+                "ok": True,
+                "available": True,
+                "raw": f"thermal_zone0={millideg}",
+                "celsius": celsius,
+                "label": base["label"],
+                "display": f"{celsius:.1f} °C",
+                "hint": _temp_hint(celsius),
+                "error": None,
+            }
+    except (OSError, ValueError):
+        pass
+
+    return {
+        "ok": False,
+        "available": False,
+        "error": "немає vcgencmd measure_temp або thermal_zone0",
+        **base,
+    }
+
+
+def read_pi_status() -> dict[str, Any]:
+    return {
+        "power": read_pi_ext5v(),
+        "temperature": read_pi_temperature(),
     }
 
 
@@ -258,5 +339,6 @@ def build_summary(must_payload: dict[str, Any] | None, must_error: str | None) -
         "ventilation": vent,
         "must": must_block,
         "bathroom": slim_bathroom(bathroom),
+        "pi": read_pi_status(),
         "pi_power": read_pi_ext5v(),
     }
