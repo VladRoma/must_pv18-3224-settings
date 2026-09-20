@@ -10,7 +10,26 @@ from typing import Any
 
 import must_bathroom
 
-_EXT5V_RE = re.compile(r"EXT5V_V\s+volt\(([0-9.]+)V\)", re.IGNORECASE)
+_EXT5V_PATTERNS = (
+    re.compile(r"EXT5V_V\s+volt\(\d+\)=([0-9.]+)\s*V", re.IGNORECASE),
+    re.compile(r"EXT5V_V\s+volt\(([0-9.]+)\s*V\)", re.IGNORECASE),
+)
+
+
+def _parse_ext5v_volts(raw: str) -> float | None:
+    for pattern in _EXT5V_PATTERNS:
+        match = pattern.search(raw)
+        if match:
+            return float(match.group(1))
+    return None
+
+
+def _ext5v_hint(volts: float) -> str:
+    if volts < 4.75:
+        return "Низька напруга — перевір блок живлення або кабель USB‑C."
+    if volts > 5.25:
+        return "Підвищена напруга на вході."
+    return "Норма для живлення Raspberry Pi (шина 5 V)."
 
 
 def read_pi_ext5v() -> dict[str, Any]:
@@ -30,7 +49,9 @@ def read_pi_ext5v() -> dict[str, Any]:
             "error": str(exc),
             "raw": None,
             "volts": None,
+            "label": "Вхідна напруга",
             "display": "—",
+            "hint": None,
         }
 
     if result.returncode != 0:
@@ -41,30 +62,36 @@ def read_pi_ext5v() -> dict[str, Any]:
             "error": err,
             "raw": None,
             "volts": None,
+            "label": "Вхідна напруга",
             "display": "—",
+            "hint": None,
         }
 
     for line in result.stdout.splitlines():
         if "EXT5V_V" not in line:
             continue
         raw = line.strip()
-        match = _EXT5V_RE.search(raw)
-        if not match:
+        parsed = _parse_ext5v_volts(raw)
+        if parsed is None:
             return {
                 "ok": False,
                 "available": True,
                 "error": "не вдалося розібрати EXT5V_V",
                 "raw": raw,
                 "volts": None,
-                "display": raw,
+                "label": "Вхідна напруга",
+                "display": "—",
+                "hint": None,
             }
-        volts = round(float(match.group(1)), 3)
+        volts = round(parsed, 3)
         return {
             "ok": True,
             "available": True,
             "raw": raw,
             "volts": volts,
+            "label": "Вхідна напруга",
             "display": f"{volts:.2f} V",
+            "hint": _ext5v_hint(volts),
         }
 
     return {
@@ -73,7 +100,9 @@ def read_pi_ext5v() -> dict[str, Any]:
         "error": "EXT5V_V не знайдено у pmic_read_adc",
         "raw": None,
         "volts": None,
+        "label": "Вхідна напруга",
         "display": "—",
+        "hint": None,
     }
 
 

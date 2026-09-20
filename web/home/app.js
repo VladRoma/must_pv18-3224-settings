@@ -49,17 +49,30 @@ function applyBattery(b) {
 }
 
 function applyPiPower(p) {
-  const main = el("pi-ext5v");
-  const raw = el("pi-ext5v-raw");
-  if (!p || p.display === "—") {
-    main.textContent = "—";
-    raw.textContent = p?.error
-      ? p.error
-      : "Лише Raspberry Pi (vcgencmd pmic_read_adc)";
+  const card = document.querySelector(".pi-power");
+  const label = el("pi-ext5v-label");
+  const value = el("pi-ext5v-value");
+  const hint = el("pi-ext5v-hint");
+
+  card?.classList.remove("ok", "warn");
+
+  if (!p?.ok || p.volts == null) {
+    label.textContent = p?.label || "Вхідна напруга";
+    value.textContent = "—";
+    hint.textContent =
+      p?.error || "Доступно на Raspberry Pi 5 (vcgencmd pmic_read_adc).";
     return;
   }
-  main.textContent = p.display;
-  raw.textContent = p.raw || p.error || "—";
+
+  label.textContent = p.label || "Вхідна напруга";
+  value.textContent = p.volts.toFixed(2);
+  hint.textContent = p.hint || "—";
+
+  if (p.volts >= 4.75 && p.volts <= 5.25) {
+    card?.classList.add("ok");
+  } else {
+    card?.classList.add("warn");
+  }
 }
 
 function applyBathroom(b) {

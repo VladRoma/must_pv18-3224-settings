@@ -227,19 +227,40 @@ body {
   color: var(--muted);
 }
 
-.pi-voltage {
-  margin: 10px 0 4px;
-  font-size: 1.6rem;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
+.pi-label {
+  margin: 8px 0 0;
+  font-size: 0.92rem;
+  color: var(--muted);
 }
 
-.pi-raw {
+.pi-voltage {
+  margin: 4px 0 6px;
+  font-size: 2.2rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+
+.pi-unit {
+  margin-left: 4px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #c4b5fd;
+}
+
+.pi-hint {
   margin: 0;
-  font-size: 0.82rem;
+  font-size: 0.88rem;
   color: var(--muted);
-  font-family: ui-monospace, Consolas, monospace;
-  word-break: break-all;
+  line-height: 1.4;
+}
+
+.pi-power.ok .pi-voltage {
+  color: var(--ok);
+}
+
+.pi-power.warn .pi-voltage {
+  color: var(--warn);
 }
 
 .nav-actions {
