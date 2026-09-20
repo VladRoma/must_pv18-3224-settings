@@ -48,6 +48,20 @@ function applyBattery(b) {
   el("bat-i").textContent = b.current != null ? `${b.current.toFixed(1)} А` : "—";
 }
 
+function applyPiPower(p) {
+  const main = el("pi-ext5v");
+  const raw = el("pi-ext5v-raw");
+  if (!p || p.display === "—") {
+    main.textContent = "—";
+    raw.textContent = p?.error
+      ? p.error
+      : "Лише Raspberry Pi (vcgencmd pmic_read_adc)";
+    return;
+  }
+  main.textContent = p.display;
+  raw.textContent = p.raw || p.error || "—";
+}
+
 function applyBathroom(b) {
   if (!b?.online || b.temperature_c == null) {
     el("bath-main").textContent = "Офлайн";
@@ -84,6 +98,7 @@ async function refresh() {
     applyMust(data.must);
     applyBattery(data.must?.battery);
     applyBathroom(data.bathroom);
+    applyPiPower(data.pi_power);
     el("updated-line").textContent = `Оновлено: ${formatLocal(data.updated)} · наступне через ${POLL_MS / 1000} с`;
 
     pill.textContent = "● live";

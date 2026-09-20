@@ -201,6 +201,47 @@ body {
   color: var(--muted);
 }
 
+.pi-power {
+  padding: 14px 16px;
+  border-left: 4px solid #a78bfa;
+}
+
+.pi-power-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.pi-power h3 {
+  margin: 0;
+  font-size: 0.78rem;
+  color: #c4b5fd;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.pi-tag {
+  font-size: 0.72rem;
+  color: var(--muted);
+}
+
+.pi-voltage {
+  margin: 10px 0 4px;
+  font-size: 1.6rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.pi-raw {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--muted);
+  font-family: ui-monospace, Consolas, monospace;
+  word-break: break-all;
+}
+
 .nav-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;

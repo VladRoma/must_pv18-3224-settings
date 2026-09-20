@@ -3,10 +3,78 @@
 
 from __future__ import annotations
 
+import re
+import subprocess
 from datetime import datetime, timezone
 from typing import Any
 
 import must_bathroom
+
+_EXT5V_RE = re.compile(r"EXT5V_V\s+volt\(([0-9.]+)V\)", re.IGNORECASE)
+
+
+def read_pi_ext5v() -> dict[str, Any]:
+    """Напруга EXT5V на Raspberry Pi (Pi 5 / pmic), через vcgencmd."""
+    try:
+        result = subprocess.run(
+            ["vcgencmd", "pmic_read_adc"],
+            capture_output=True,
+            text=True,
+            timeout=3,
+            check=False,
+        )
+    except (OSError, subprocess.SubprocessError) as exc:
+        return {
+            "ok": False,
+            "available": False,
+            "error": str(exc),
+            "raw": None,
+            "volts": None,
+            "display": "—",
+        }
+
+    if result.returncode != 0:
+        err = (result.stderr or result.stdout or "vcgencmd failed").strip()
+        return {
+            "ok": False,
+            "available": True,
+            "error": err,
+            "raw": None,
+            "volts": None,
+            "display": "—",
+        }
+
+    for line in result.stdout.splitlines():
+        if "EXT5V_V" not in line:
+            continue
+        raw = line.strip()
+        match = _EXT5V_RE.search(raw)
+        if not match:
+            return {
+                "ok": False,
+                "available": True,
+                "error": "не вдалося розібрати EXT5V_V",
+                "raw": raw,
+                "volts": None,
+                "display": raw,
+            }
+        volts = round(float(match.group(1)), 3)
+        return {
+            "ok": True,
+            "available": True,
+            "raw": raw,
+            "volts": volts,
+            "display": f"{volts:.2f} V",
+        }
+
+    return {
+        "ok": False,
+        "available": True,
+        "error": "EXT5V_V не знайдено у pmic_read_adc",
+        "raw": None,
+        "volts": None,
+        "display": "—",
+    }
 
 
 def ventilation_advice(bathroom: dict[str, Any]) -> dict[str, Any]:
@@ -161,4 +229,5 @@ def build_summary(must_payload: dict[str, Any] | None, must_error: str | None) -
         "ventilation": vent,
         "must": must_block,
         "bathroom": slim_bathroom(bathroom),
+        "pi_power": read_pi_ext5v(),
     }
