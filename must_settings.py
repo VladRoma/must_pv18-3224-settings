@@ -446,8 +446,26 @@ class Report:
         print("\n".join(self._lines))
 
 
+# VPM II: біти 4, 5, 7 у 20142 на LCD «активні нулем» (перевірено на дисплеї vs Modbus).
+LCD_BIT_INVERT = frozenset({4, 5, 7})
+
+
+def lcd_bit_active(raw: int, bit: int) -> bool:
+    active = bool(raw & (1 << bit))
+    if bit in LCD_BIT_INVERT:
+        active = not active
+    return active
+
+
 def lcd_bit(raw: int, bit: int, on: str, off: str) -> str:
-    return on if raw & (1 << bit) else off
+    return on if lcd_bit_active(raw, bit) else off
+
+
+def lcd_bit_write_value(bit: int, want_on: bool) -> bool:
+    """want_on: користувач обрав ON-мітку (PTE, LON, AON…)."""
+    if bit in LCD_BIT_INVERT:
+        return not want_on
+    return want_on
 
 
 def soc_mode(inv: RegisterMap) -> bool:
@@ -858,7 +876,7 @@ def build_writable_settings(data: dict[str, RegisterMap]) -> list[dict[str, obje
         register = int(spec["register"])
         raw = _register_value(data, register)
         if spec["kind"] == "bit":
-            raw = 1 if raw & (1 << int(spec["bit"])) else 0
+            raw = 1 if lcd_bit_active(raw, int(spec["bit"])) else 0
         items.append(
             {
                 **spec,
@@ -882,7 +900,8 @@ def apply_setting_write(
     if spec["kind"] == "bit":
         current = _register_value(data, register)
         bit = int(spec["bit"])
-        if encoded:
+        set_bit = lcd_bit_write_value(bit, bool(encoded))
+        if set_bit:
             current |= 1 << bit
         else:
             current &= ~(1 << bit)
