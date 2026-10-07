@@ -6,6 +6,7 @@ from __future__ import annotations
 import argparse
 import hmac
 import json
+import sys
 import mimetypes
 import os
 import secrets
@@ -25,6 +26,7 @@ import must_battery
 import must_bathroom
 import must_home
 import must_mongodb
+import must_telegram
 import must_settings as core
 
 WEB_DIR = Path(__file__).resolve().parent / "web"
@@ -233,6 +235,7 @@ def build_payload(args: argparse.Namespace, *, record_mongo: bool = False) -> di
         "pv_p": metric("PV потужність"),
         "load_p": metric("Потужність навантаження"),
         "grid_p": metric("Потужність мережі"),
+        "grid_v": metric("Напруга мережі"),
         "batt_p": metric("Потужність АКБ (інвертор)"),
         "batt_v": metric("Напруга АКБ (інвертор)"),
         "batt_i": metric("Струм АКБ (інвертор)"),
@@ -247,6 +250,7 @@ def build_payload(args: argparse.Namespace, *, record_mongo: bool = False) -> di
         "pv_w": _parse_num(metrics["pv_p"]["value"]),
         "load_w": _parse_num(metrics["load_p"]["value"]),
         "grid_w": _parse_num(metrics["grid_p"]["value"]),
+        "grid_v": _parse_num(metrics["grid_v"]["value"]),
         "batt_w": _parse_num(metrics["batt_p"]["value"]),
     }
 
@@ -633,6 +637,10 @@ def run_web(args: argparse.Namespace) -> None:
         mins = must_mongodb.background_interval_sec() // 60
         print(f"MongoDB фоновий запис  →  кожні {mins} хв (лише MUST/АКБ, не ванна)")
         start_mongo_background(args)
+    tg_line = must_telegram.status_line(args)
+    if tg_line:
+        print(tg_line)
+        must_telegram.start_background(args)
     print("Ctrl+C — зупинити сервер")
     try:
         server.serve_forever()
@@ -640,6 +648,7 @@ def run_web(args: argparse.Namespace) -> None:
         print("\nЗупинено.")
     finally:
         _mongo_bg_stop.set()
+        must_telegram.stop_background()
         server.server_close()
 
 

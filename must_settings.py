@@ -1012,6 +1012,11 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Логувати кожен запис у MongoDB",
     )
+    parser.add_argument(
+        "--telegram",
+        action="store_true",
+        help="Telegram-сповіщення (або TELEGRAM_BOT_TOKEN + TELEGRAM_CHAT_ID у .env)",
+    )
     return parser.parse_args()
 
 

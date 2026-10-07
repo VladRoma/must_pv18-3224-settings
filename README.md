@@ -144,6 +144,29 @@ chmod +x deploy/raspberry-pi/install.sh
 
 IP Pi: `hostname -I`
 
+### Telegram (мережа / заряд)
+
+1. У Telegram: **@BotFather** → `/newbot` → скопіюй **token**.
+2. Напиши боту `/start` — у відповіді буде **chat id** (або візьми з @userinfobot).
+3. На Pi у `.env` або `.must-web.env` (поруч із проєктом):
+
+```env
+TELEGRAM_BOT_TOKEN=123456:ABC...
+TELEGRAM_CHAT_ID=987654321
+```
+
+4. Перезапуск: `sudo systemctl restart must-web`.
+
+Сповіщення (після стабілізації показників ~2–3 хв):
+
+- зникла мережа 220 V (напруга мережі &lt; порогу);
+- мережа відновилась;
+- заряджання АКБ (потужність АКБ або стан «Заряд від мережі»).
+
+Опційно: `TELEGRAM_INTERVAL_SEC`, `TELEGRAM_GRID_V_MIN=180`, `TELEGRAM_CHARGE_W_MIN=80`, `TELEGRAM_DEBOUNCE_SAMPLES=3`.
+
+У чаті з ботом: **`/status`** — поточні показники MUST.
+
 Файли: `deploy/raspberry-pi/must-web.service`, `deploy/raspberry-pi/install.sh`
 
 ### Tailscale (доступ не з дому)

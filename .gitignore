@@ -219,6 +219,7 @@ __marimo__/
 
 .must-settings-password
 .must-bathroom-token
+.must-telegram-state.json
 esp32/bathroom_dht11/config.h
 .must-web.env
 
