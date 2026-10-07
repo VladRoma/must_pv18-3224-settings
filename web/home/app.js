@@ -94,6 +94,16 @@ function applyPi(pi) {
   );
 }
 
+function applyFeatures(f) {
+  const on = f?.bathroom === true;
+  for (const id of ["vent-card", "bath-card", "nav-bath"]) {
+    const node = el(id);
+    if (node) node.hidden = !on;
+  }
+  const eyebrow = el("home-eyebrow");
+  if (eyebrow) eyebrow.textContent = on ? "MUST · АКБ · ванна" : "MUST · АКБ";
+}
+
 function applyBathroom(b) {
   if (!b?.online || b.temperature_c == null) {
     el("bath-main").textContent = "Офлайн";
@@ -126,10 +136,13 @@ async function refresh() {
     const data = await res.json();
     if (!data.ok) throw new Error("bad response");
 
-    applyVentilation(data.ventilation);
+    applyFeatures(data.features);
     applyMust(data.must);
     applyBattery(data.must?.battery);
-    applyBathroom(data.bathroom);
+    if (data.features?.bathroom) {
+      applyVentilation(data.ventilation);
+      applyBathroom(data.bathroom);
+    }
     applyPi(data.pi || { power: data.pi_power });
     el("updated-line").textContent = `Оновлено: ${formatLocal(data.updated)} · наступне через ${POLL_MS / 1000} с`;
 

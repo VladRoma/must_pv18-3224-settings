@@ -10,14 +10,14 @@
 <body>
   <header class="top">
     <div>
-      <p class="eyebrow">MUST · АКБ · ванна</p>
+      <p id="home-eyebrow" class="eyebrow">MUST · АКБ</p>
       <h1>Домашній огляд</h1>
     </div>
     <div id="status-pill" class="pill">● оновлення…</div>
   </header>
 
   <main class="layout">
-    <section id="vent-card" class="vent-card card">
+    <section id="vent-card" class="vent-card card" hidden>
       <div class="vent-icon" aria-hidden="true">🌬</div>
       <div class="vent-body">
         <p class="vent-label">Провітрювання</p>
@@ -51,7 +51,7 @@
         </ul>
       </article>
 
-      <article class="mini card">
+      <article id="bath-card" class="mini card" hidden>
         <h3>Ванна</h3>
         <p class="big" id="bath-main">—</p>
         <ul class="kv">
@@ -84,7 +84,7 @@
 
     <nav class="nav-actions">
       <a class="btn btn-must" href="/">MUST · інвертор</a>
-      <a class="btn btn-bath" href="/bathroom/">Ванна · DHT11</a>
+      <a id="nav-bath" class="btn btn-bath" href="/bathroom/" hidden>Ванна · DHT11</a>
     </nav>
 
     <p id="updated-line" class="updated">—</p>
