@@ -318,6 +318,21 @@ body {
   font-size: 0.82rem;
 }
 
+.feed-link {
+  margin: 8px 0 0;
+  text-align: center;
+  font-size: 0.82rem;
+}
+
+.feed-link a {
+  color: #c4b5fd;
+  text-decoration: none;
+}
+
+.feed-link a:hover {
+  text-decoration: underline;
+}
+
 @media (max-width: 760px) {
   .grid {
     grid-template-columns: 1fr;

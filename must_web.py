@@ -153,6 +153,22 @@ def _metric_from(value: object, unit: str, label: str) -> dict:
     return {"label": label, "value": value, "unit": unit}
 
 
+def fetch_home_summary(args: argparse.Namespace) -> dict:
+    must_payload: dict | None = None
+    must_error: str | None = None
+    try:
+        must_payload = build_payload(args)
+    except serial.SerialException as exc:
+        must_error = f"Serial: {exc}"
+    except core.ModbusRtuError as exc:
+        must_error = str(exc)
+    except must_battery.BatteryError as exc:
+        must_error = str(exc)
+    except Exception as exc:
+        must_error = str(exc)
+    return must_home.build_summary(must_payload, must_error)
+
+
 def build_payload(args: argparse.Namespace, *, record_mongo: bool = False) -> dict:
     sections: list[core.Section] = []
     writable: list[dict] = []
@@ -356,19 +372,15 @@ def make_handler(args: argparse.Namespace, auth: SettingsAuth):
                 return
 
             if route == "/api/home/summary":
-                must_payload: dict | None = None
-                must_error: str | None = None
-                try:
-                    must_payload = build_payload(args)
-                except serial.SerialException as exc:
-                    must_error = f"Serial: {exc}"
-                except core.ModbusRtuError as exc:
-                    must_error = str(exc)
-                except must_battery.BatteryError as exc:
-                    must_error = str(exc)
-                except Exception as exc:
-                    must_error = str(exc)
-                self._send_json(200, must_home.build_summary(must_payload, must_error))
+                self._send_json(200, fetch_home_summary(args))
+                return
+
+            if route in ("/api/home/rss.xml", "/home/feed.xml"):
+                host = self.headers.get("Host") or f"127.0.0.1:{getattr(args, 'http_port', 8080)}"
+                base_url = f"http://{host}"
+                summary = fetch_home_summary(args)
+                body = must_home.build_rss(summary, base_url).encode("utf-8")
+                self._send_bytes(200, body, "application/rss+xml; charset=utf-8")
                 return
 
             if route in ("/home", "/home/"):
@@ -594,6 +606,7 @@ def run_web(args: argparse.Namespace) -> None:
             print(f"Tailscale             →  http://{ts_ip}:{port}/")
     print("Вкладка «Налаштування» захищена паролем.")
     print(f"Огляд (дім)           →  http://127.0.0.1:{port}/home/")
+    print(f"RSS (дім)             →  http://127.0.0.1:{port}/home/feed.xml")
     print(f"Ванна (DHT11)         →  http://127.0.0.1:{port}/bathroom/")
     if host == "0.0.0.0":
         lan_ip = _guess_lan_ip()

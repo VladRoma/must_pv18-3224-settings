@@ -3,9 +3,11 @@
 
 from __future__ import annotations
 
+import html
 import re
 import subprocess
 from datetime import datetime, timezone
+from email.utils import format_datetime
 from pathlib import Path
 from typing import Any
 
@@ -342,3 +344,73 @@ def build_summary(must_payload: dict[str, Any] | None, must_error: str | None) -
         "pi": read_pi_status(),
         "pi_power": read_pi_ext5v(),
     }
+
+
+def _rss_description(summary: dict[str, Any]) -> str:
+    vent = summary.get("ventilation") or {}
+    must = summary.get("must") or {}
+    bath = summary.get("bathroom") or {}
+    pi = summary.get("pi") or {}
+    power = pi.get("power") or summary.get("pi_power") or {}
+    temp = pi.get("temperature") or {}
+
+    lines = [
+        f"Провітрювання: {vent.get('title', '—')}",
+        vent.get("detail", ""),
+        "",
+        f"Інвертор: {must.get('state', '—')} · SOC {must.get('soc', '—')}",
+        f"PV {must.get('pv', '—')} · навантаження {must.get('load', '—')} · АКБ {must.get('batt', '—')}",
+    ]
+    bat = must.get("battery")
+    if bat:
+        lines.append(
+            f"АКБ Wi‑Fi: {bat.get('soc', '—')}% · {bat.get('power', '—')} Вт · {bat.get('state', '—')}"
+        )
+    if bath.get("temperature_c") is not None:
+        lines.append(
+            f"Ванна: {bath['temperature_c']} °C · {bath['humidity_pct']}% вологості"
+        )
+    else:
+        lines.append("Ванна: немає свіжих даних")
+    if power.get("display"):
+        lines.append(f"Pi живлення: {power.get('display')}")
+    if temp.get("display"):
+        lines.append(f"Pi CPU: {temp.get('display')}")
+    return "\n".join(line for line in lines if line is not None)
+
+
+def build_rss(summary: dict[str, Any], base_url: str) -> str:
+    """RSS 2.0 — один актуальний item (для віджетів / RSS-читачів)."""
+    base = base_url.rstrip("/")
+    updated_raw = summary.get("updated") or ""
+    try:
+        updated_dt = datetime.fromisoformat(updated_raw.replace("Z", "+00:00"))
+        if updated_dt.tzinfo is None:
+            updated_dt = updated_dt.replace(tzinfo=timezone.utc)
+    except ValueError:
+        updated_dt = datetime.now(timezone.utc)
+
+    vent = summary.get("ventilation") or {}
+    title = vent.get("title") or "Домашній огляд"
+    desc = _rss_description(summary)
+    pub = format_datetime(updated_dt)
+    guid = updated_dt.astimezone(timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+
+    return f"""<?xml version="1.0" encoding="UTF-8"?>
+<rss version="2.0">
+  <channel>
+    <title>MUST · Дім</title>
+    <link>{html.escape(base)}/home/</link>
+    <description>Інвертор, АКБ, ванна, провітрювання, Raspberry Pi</description>
+    <language>uk</language>
+    <lastBuildDate>{pub}</lastBuildDate>
+    <item>
+      <title>{html.escape(title)}</title>
+      <link>{html.escape(base)}/home/</link>
+      <description><![CDATA[{desc}]]></description>
+      <pubDate>{pub}</pubDate>
+      <guid isPermaLink="false">{html.escape(guid)}</guid>
+    </item>
+  </channel>
+</rss>
+"""

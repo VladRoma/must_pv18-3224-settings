@@ -196,6 +196,16 @@ python must_settings.py --web --lan
 
 3. Зведений огляд (інвертор + АКБ + ванна + провітрювання): `http://<IP-Pi>:8080/home/`
 
+   **RSS / API для віджетів:**
+   - RSS: `http://<IP-Pi>:8080/home/feed.xml` (те саме, що `/api/home/rss.xml`)
+   - JSON: `http://<IP-Pi>:8080/api/home/summary`
+
+   **Windows 11:**
+   - **Edge → «Додаток»** (встановити `/home/` як PWA) — закріпити на панелі завдань; оновлюй сторінку або залиш відкритою.
+   - **RSS-віджет** (BeWidgets, Widget Launcher тощо) — URL стрічки `http://<IP-Pi>:8080/home/feed.xml` (ПК має бачити Pi у Wi‑Fi або через Tailscale).
+   - **Rainmeter** — WebParser на `http://<IP-Pi>:8080/api/home/summary` (JSON).
+   - Вбудовані **Windows Widgets** не читають довільний URL напряму — потрібен окремий застосунок у Microsoft Store або PWA/RSS-варіанти вище.
+
 4. Сторінка ванни: `http://<IP-Pi>:8080/bathroom/`
 
 5. Прошивка ESP32: каталог `esp32/bathroom_dht11/` — скопіюй `config.example.h` → `config.h`, вкажи Wi‑Fi, IP Pi і той самий `INGEST_TOKEN`.
