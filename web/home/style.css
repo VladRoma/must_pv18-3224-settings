@@ -83,6 +83,15 @@ body {
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.22);
 }
 
+body.home-bathroom-off #vent-card,
+body.home-bathroom-off #bath-card,
+body.home-bathroom-off #nav-bath,
+#vent-card[hidden],
+#bath-card[hidden],
+#nav-bath[hidden] {
+  display: none !important;
+}
+
 .vent-card {
   display: grid;
   grid-template-columns: auto 1fr auto;

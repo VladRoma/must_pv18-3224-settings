@@ -96,6 +96,7 @@ function applyPi(pi) {
 
 function applyFeatures(f) {
   const on = f?.bathroom === true;
+  document.body.classList.toggle("home-bathroom-off", !on);
   for (const id of ["vent-card", "bath-card", "nav-bath"]) {
     const node = el(id);
     if (node) node.hidden = !on;
