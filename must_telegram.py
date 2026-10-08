@@ -378,12 +378,20 @@ def _telegram_loop(args: Any, stop: threading.Event) -> None:
                 _notify_charging(snap)
 
             state["last_ok"] = payload.get("updated")
+            state.pop("comm_fail_streak", None)
             state.pop("comm_notified", None)
         except Exception as exc:
-            if not state.get("comm_notified"):
-                send_message(f"⚠️ MUST: немає актуальних даних інвертора.\n{exc}")
+            streak = int(state.get("comm_fail_streak") or 0) + 1
+            state["comm_fail_streak"] = streak
+            need = debounce_samples()
+            print(f"[telegram] пропуск ({streak}/{need}): {exc}", flush=True)
+            if streak >= need and not state.get("comm_notified"):
+                send_message(
+                    "⚠️ MUST: не вдалося оновити телеметрію.\n"
+                    f"{exc}\n"
+                    "Якщо дашборд у браузері працює — перезапусти must-web після оновлення."
+                )
                 state["comm_notified"] = True
-            print(f"[telegram] пропуск: {exc}", flush=True)
 
         _save_state(state)
         if stop.wait(interval):

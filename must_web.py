@@ -189,6 +189,10 @@ def build_payload(args: argparse.Namespace, *, record_mongo: bool = False) -> di
             inverter_error = str(exc)
             if not bms_host:
                 raise
+        except (IndexError, KeyError) as exc:
+            inverter_error = f"збій розбору Modbus: {exc}"
+            if not bms_host:
+                raise core.ModbusRtuError(inverter_error) from exc
 
     def metric(label: str) -> dict:
         row = _find_row(sections, label)

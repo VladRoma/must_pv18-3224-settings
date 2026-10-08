@@ -29,6 +29,7 @@ CACHE_TTL = 8.0
 STATUS_QUERY = bytes.fromhex("9a00000a0000000019519d")
 CELLS_QUERY = bytes.fromhex("9a00000a020000020101289c9d")
 SERIAL_QUERY = bytes.fromhex("9a00000002000000a0c89d")
+MIN_STATUS_FRAME_LEN = 35
 
 _cache_lock = threading.Lock()
 _cache: dict[str, tuple[float, dict[str, Any]]] = {}
@@ -174,12 +175,21 @@ class PaceexWifiClient:
 
     def read(self) -> BatteryReading:
         status = self._query(STATUS_QUERY)
+        if len(status) < MIN_STATUS_FRAME_LEN:
+            raise BatteryProtocolError(
+                f"короткий STATUS-кадр ({len(status)} байт, потрібно ≥ {MIN_STATUS_FRAME_LEN})"
+            )
         time.sleep(QUERY_COOLDOWN)
         cells_frame = self._query(CELLS_QUERY)
 
         cell_count = cells_frame[11]
         if not 1 <= cell_count <= 32:
             raise BatteryProtocolError(f"некоректна кількість комірок: {cell_count}")
+        cells_end = 12 + cell_count * 4
+        if len(cells_frame) < cells_end:
+            raise BatteryProtocolError(
+                f"короткий CELLS-кадр ({len(cells_frame)} байт, потрібно ≥ {cells_end})"
+            )
 
         cells = [
             int.from_bytes(cells_frame[12 + index * 4 : 14 + index * 4], "big") / 1000
@@ -260,18 +270,24 @@ def read_cached(host: str, port: int = DEFAULT_PORT, timeout: float = DEFAULT_TI
         hit = _cache.get(key)
         if hit and now - hit[0] < CACHE_TTL:
             return dict(hit[1])
-    try:
-        payload = PaceexWifiClient(host, port, timeout).read().as_dict()
-    except BatteryError as exc:
-        payload = {
-            "ok": False,
-            "host": host,
-            "port": port,
-            "error": str(exc),
-        }
-    with _cache_lock:
+        try:
+            payload = PaceexWifiClient(host, port, timeout).read().as_dict()
+        except BatteryError as exc:
+            payload = {
+                "ok": False,
+                "host": host,
+                "port": port,
+                "error": str(exc),
+            }
+        except (IndexError, ValueError) as exc:
+            payload = {
+                "ok": False,
+                "host": host,
+                "port": port,
+                "error": f"пошкоджені дані BMS: {exc}",
+            }
         _cache[key] = (time.monotonic(), payload)
-    return dict(payload)
+        return dict(payload)
 
 
 def print_report(reading: BatteryReading) -> None:
