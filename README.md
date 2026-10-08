@@ -155,6 +155,14 @@ TELEGRAM_BOT_TOKEN=123456:ABC...
 TELEGRAM_CHAT_ID=987654321
 ```
 
+Кілька одержувачів (ти + дружина тощо) — **через кому**, без пробілів або з пробілами після коми:
+
+```env
+TELEGRAM_CHAT_ID=987654321,123456789012
+```
+
+Другий id — так само через **@userinfobot** з того акаунта Telegram. Після зміни `.env`: `sudo systemctl restart must-web`.
+
 4. Перезапуск: `sudo systemctl restart must-web`.
 
 Сповіщення (після стабілізації показників ~2–3 хв):

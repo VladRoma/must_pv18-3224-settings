@@ -92,7 +92,12 @@ def chat_ids() -> list[str]:
     raw = (os.environ.get("TELEGRAM_CHAT_ID") or "").strip()
     if not raw:
         return []
-    return [part.strip() for part in raw.split(",") if part.strip()]
+    parts: list[str] = []
+    for chunk in raw.replace(";", ",").split(","):
+        part = chunk.strip()
+        if part:
+            parts.append(part)
+    return parts
 
 
 def bot_token() -> str:
@@ -105,7 +110,11 @@ def status_line(args: Any) -> str | None:
         return None
     ids = chat_ids()
     sec = poll_interval_sec()
-    return f"Telegram сповіщення  →  chat {ids[0]}{'…' if len(ids) > 1 else ''} · кожні {sec} с"
+    if len(ids) == 1:
+        who = f"chat {ids[0]}"
+    else:
+        who = f"{len(ids)} чати"
+    return f"Telegram сповіщення  →  {who} · кожні {sec} с"
 
 
 def _load_state() -> dict[str, Any]:
@@ -320,7 +329,8 @@ def _process_updates(token: str, offset: int, allowed: set[str], args: Any) -> i
             _send_to_chat(
                 chat_id,
                 f"Chat ID: {chat_id}\n"
-                "Додай у .env на Pi: TELEGRAM_CHAT_ID=" + chat_id + "\n"
+                "Один одержувач:\nTELEGRAM_CHAT_ID=" + chat_id + "\n"
+                "Кілька (через кому):\nTELEGRAM_CHAT_ID=111111,222222\n"
                 "Перезапусти must-web. Команди: /status — показники MUST.",
             )
             continue
