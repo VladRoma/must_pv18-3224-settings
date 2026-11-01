@@ -87,38 +87,59 @@ def _off_grid_state(state_text: str) -> bool:
     return "Off-Grid" in state_text or "Автономний" in state_text
 
 
+def _batt_charge_watts(batt_w: float | None, *, wifi_bms: bool) -> float:
+    """Потужність заряду в Вт (завжди ≥ 0). MUST інвертор: batt_w < 0 = заряд; Wi‑Fi BMS: batt_w > 0."""
+    if batt_w is None:
+        return 0.0
+    if wifi_bms:
+        return batt_w if batt_w > 0 else 0.0
+    return -batt_w if batt_w < 0 else 0.0
+
+
+def _batt_discharge_watts(batt_w: float | None, *, wifi_bms: bool) -> float:
+    if batt_w is None:
+        return 0.0
+    if wifi_bms:
+        return -batt_w if batt_w < 0 else 0.0
+    return batt_w if batt_w > 0 else 0.0
+
+
 def _detect_charging(
     *,
     state_text: str,
     grid_ok: bool | None,
     batt_w: float | None,
     pv_w: float | None,
+    wifi_bms: bool,
 ) -> bool:
-    """Заряд: потужність на АКБ + контекст (мережа / PV / стан інвертора)."""
+    """Заряд: знак потужності АКБ (інвертор vs BMS) + мережа / PV / стан."""
     min_w = charge_w_min()
     pv_min = pv_charge_w_min()
     pv = pv_w or 0.0
-    has_batt = batt_w is not None and batt_w >= min_w
+    charge_pw = _batt_charge_watts(batt_w, wifi_bms=wifi_bms)
+    has_charge = charge_pw >= min_w
 
     if grid_ok is True and state_text == "Заряд від мережі":
         return True
-    if state_text == "Заряд" and has_batt:
+    if state_text == "Заряд" and has_charge:
         return True
 
     if grid_ok is False:
         if _off_grid_state(state_text) and pv < pv_min:
             return False
+        if _off_grid_state(state_text) and _batt_discharge_watts(batt_w, wifi_bms=wifi_bms) >= min_w:
+            return False
         if state_text == "Заряд від мережі":
-            return has_batt and pv >= pv_min
-        return has_batt and pv >= pv_min
+            return has_charge and pv >= pv_min
+        return has_charge and pv >= pv_min
 
     if grid_ok is None:
-        return has_batt and state_text in ("Заряд від мережі", "Заряд")
+        return has_charge and state_text in ("Заряд від мережі", "Заряд")
 
     if _off_grid_state(state_text):
-        return has_batt and pv >= pv_min
+        return has_charge and pv >= pv_min
 
-    return has_batt
+    return has_charge
 
 
 def telegram_enabled(args: Any) -> bool:
@@ -254,15 +275,20 @@ def _snapshot(payload: dict[str, Any]) -> dict[str, Any]:
         grid_ok = None
     else:
         grid_ok = grid_v >= grid_v_min()
+    battery = payload.get("battery") or {}
+    wifi_bms = bool(battery.get("ok"))
+    charge_pw = _batt_charge_watts(batt_w, wifi_bms=wifi_bms)
     charging = _detect_charging(
         state_text=state_text,
         grid_ok=grid_ok,
         batt_w=batt_w,
         pv_w=numbers.get("pv_w"),
+        wifi_bms=wifi_bms,
     )
     return {
         "grid_ok": grid_ok,
         "charging": charging,
+        "charge_pw": charge_pw,
         "grid_v": grid_v,
         "batt_w": batt_w,
         "pv_w": numbers.get("pv_w"),
@@ -332,11 +358,19 @@ def _notify_grid_change(was_ok: bool, snap: dict[str, Any]) -> None:
 
 
 def _notify_charging(snap: dict[str, Any]) -> None:
+    charge_pw = snap.get("charge_pw")
     batt_w = snap.get("batt_w")
     pv_w = snap.get("pv_w")
     grid_w = snap.get("grid_w")
     soc = snap.get("soc")
-    parts = [f"Потужність АКБ: {batt_w:.0f} W" if batt_w is not None else "Потужність АКБ: —"]
+    if charge_pw is not None and charge_pw > 0:
+        parts = [
+            f"Заряд АКБ: {charge_pw:.0f} W (регістр {batt_w:.0f} W)"
+            if batt_w is not None
+            else f"Заряд АКБ: {charge_pw:.0f} W"
+        ]
+    else:
+        parts = [f"Потужність АКБ: {batt_w:.0f} W" if batt_w is not None else "Потужність АКБ: —"]
     if pv_w is not None:
         parts.append(f"PV: {pv_w:.0f} W")
     if grid_w is not None:
