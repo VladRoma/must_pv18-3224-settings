@@ -19,6 +19,7 @@ STATE_FILE = Path(__file__).resolve().parent / ".must-telegram-state.json"
 DEFAULT_INTERVAL_SEC = 45
 DEFAULT_GRID_V_MIN = 180.0
 DEFAULT_CHARGE_W_MIN = 80.0
+DEFAULT_PV_CHARGE_W_MIN = 50.0
 DEFAULT_DEBOUNCE_SAMPLES = 3
 
 
@@ -76,6 +77,48 @@ def grid_v_min() -> float:
 
 def charge_w_min() -> float:
     return _env_float("TELEGRAM_CHARGE_W_MIN", DEFAULT_CHARGE_W_MIN)
+
+
+def pv_charge_w_min() -> float:
+    return _env_float("TELEGRAM_PV_CHARGE_W_MIN", DEFAULT_PV_CHARGE_W_MIN)
+
+
+def _off_grid_state(state_text: str) -> bool:
+    return "Off-Grid" in state_text or "Автономний" in state_text
+
+
+def _detect_charging(
+    *,
+    state_text: str,
+    grid_ok: bool | None,
+    batt_w: float | None,
+    pv_w: float | None,
+) -> bool:
+    """Заряд: потужність на АКБ + контекст (мережа / PV / стан інвертора)."""
+    min_w = charge_w_min()
+    pv_min = pv_charge_w_min()
+    pv = pv_w or 0.0
+    has_batt = batt_w is not None and batt_w >= min_w
+
+    if grid_ok is True and state_text == "Заряд від мережі":
+        return True
+    if state_text == "Заряд" and has_batt:
+        return True
+
+    if grid_ok is False:
+        if _off_grid_state(state_text) and pv < pv_min:
+            return False
+        if state_text == "Заряд від мережі":
+            return has_batt and pv >= pv_min
+        return has_batt and pv >= pv_min
+
+    if grid_ok is None:
+        return has_batt and state_text in ("Заряд від мережі", "Заряд")
+
+    if _off_grid_state(state_text):
+        return has_batt and pv >= pv_min
+
+    return has_batt
 
 
 def telegram_enabled(args: Any) -> bool:
@@ -211,9 +254,12 @@ def _snapshot(payload: dict[str, Any]) -> dict[str, Any]:
         grid_ok = None
     else:
         grid_ok = grid_v >= grid_v_min()
-    charging = batt_w is not None and batt_w >= charge_w_min()
-    if "Заряд" in state_text:
-        charging = True
+    charging = _detect_charging(
+        state_text=state_text,
+        grid_ok=grid_ok,
+        batt_w=batt_w,
+        pv_w=numbers.get("pv_w"),
+    )
     return {
         "grid_ok": grid_ok,
         "charging": charging,
